@@ -20,6 +20,42 @@ else if (!string.IsNullOrWhiteSpace(errorMessage))
 }
 else
 {
+    <div class="row mb-4">
+        <div class="col">
+            <div class="card p-3">
+                <strong>Total Sensors</strong>
+                <h3>@sensors.Count</h3>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card p-3">
+                <strong>Normal</strong>
+                <h3>@sensors.Count(s => s.Status == "Normal")</h3>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card p-3">
+                <strong>Warnings</strong>
+                <h3>@sensors.Count(s => s.Status == "Warning")</h3>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card p-3">
+                <strong>Critical</strong>
+                <h3>@sensors.Count(s => s.Status == "Critical")</h3>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card p-3">
+                <strong>Offline</strong>
+                <h3>@sensors.Count(s => s.Status == "Offline")</h3>
+            </div>
+        </div>
+    </div>
     <h3>Registered Sensors</h3>
 
     @if (sensors.Count == 0)
