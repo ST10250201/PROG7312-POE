@@ -25,6 +25,6 @@ Content-Type: application/json
 {
   "macAddress": "AA:BB:CC:DD:EE:FF",
   "dataType": "Temperature",
-  "value": 85,
+  "value": 65,
   "unit": "C"
 }

@@ -39,6 +39,14 @@ app.MapGet("/", () =>
 
 app.MapGet("/api/sensors", () =>
 {
+    foreach (var sensor in sensors)
+    {
+        if (DateTime.UtcNow - sensor.LastSeen > TimeSpan.FromMinutes(2))
+        {
+            sensor.Status = "Offline";
+        }
+    }
+
     return Results.Ok(sensors);
 });
 
