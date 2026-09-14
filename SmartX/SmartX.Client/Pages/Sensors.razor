@@ -6,13 +6,11 @@
 
 <h1>Smart-X Sensor Dashboard</h1>
 
-<p>
-    Live sensor records retrieved from the Smart-X Minimal API.
-</p>
+<p>Live sensor records retrieved from the Smart-X Minimal API.</p>
 
 @if (isLoading)
 {
-    <p>Loading sensors...</p>
+    <p>Loading Smart-X data...</p>
 }
 else if (!string.IsNullOrWhiteSpace(errorMessage))
 {
@@ -20,50 +18,103 @@ else if (!string.IsNullOrWhiteSpace(errorMessage))
         @errorMessage
     </div>
 }
-else if (sensors.Count == 0)
-{
-    <div class="alert alert-info">
-        No sensors are currently registered.
-    </div>
-}
 else
 {
-    <div class="table-responsive">
-        <table class="table table-hover align-middle">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>MAC Address</th>
-                    <th>Location</th>
-                    <th>Category</th>
-                    <th>Status</th>
-                    <th>Last Seen</th>
-                </tr>
-            </thead>
+    <h3>Registered Sensors</h3>
 
-            <tbody>
-                @foreach (var sensor in sensors)
-                {
+    @if (sensors.Count == 0)
+    {
+        <div class="alert alert-info">
+            No sensors are currently registered.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
                     <tr>
-                        <td>@sensor.Id</td>
-                        <td>@sensor.MacAddress</td>
-                        <td>@sensor.Location</td>
-                        <td>@sensor.Category</td>
-                        <td>
-                            <span class="@GetStatusClass(sensor.Status)">
-                                @sensor.Status
-                            </span>
-                        </td>
-                        <td>@sensor.LastSeen.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <th>ID</th>
+                        <th>MAC Address</th>
+                        <th>Location</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Last Seen</th>
                     </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+                </thead>
+
+                <tbody>
+                    @foreach (var sensor in sensors)
+                    {
+                        <tr>
+                            <td>@sensor.Id</td>
+                            <td>@sensor.MacAddress</td>
+                            <td>@sensor.Location</td>
+                            <td>@sensor.Category</td>
+                            <td>
+                                <span class="@GetStatusClass(sensor.Status)">
+                                    @sensor.Status
+                                </span>
+                            </td>
+                            <td>
+                                @sensor.LastSeen.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <hr />
+
+    <h3>Encrypted Sensor Attachments</h3>
+
+    @if (attachments.Count == 0)
+    {
+        <div class="alert alert-secondary">
+            No sensor attachments have been uploaded.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-bordered align-middle">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Sensor MAC</th>
+                        <th>Original File</th>
+                        <th>Content Type</th>
+                        <th>File Size</th>
+                        <th>Uploaded</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var attachment in attachments)
+                    {
+                        <tr>
+                            <td>@attachment.Id</td>
+                            <td>@attachment.SensorMacAddress</td>
+                            <td>@attachment.OriginalFileName</td>
+                            <td>@attachment.ContentType</td>
+                            <td>@FormatFileSize(attachment.FileSize)</td>
+                            <td>
+                                @attachment.UploadedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 }
 
 @code {
     private List<SensorRecord> sensors = new();
+    private List<SensorAttachment> attachments = new();
+
     private bool isLoading = true;
     private string errorMessage = string.Empty;
 
@@ -74,10 +125,14 @@ else
             sensors =
                 await Http.GetFromJsonAsync<List<SensorRecord>>("api/sensors")
                 ?? new List<SensorRecord>();
+
+            attachments =
+                await Http.GetFromJsonAsync<List<SensorAttachment>>("api/attachments")
+                ?? new List<SensorAttachment>();
         }
         catch (Exception ex)
         {
-            errorMessage = $"Unable to load sensor data: {ex.Message}";
+            errorMessage = $"Unable to load Smart-X data: {ex.Message}";
         }
         finally
         {
@@ -95,5 +150,15 @@ else
             "Offline" => "badge bg-secondary",
             _ => "badge bg-light text-dark"
         };
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        return $"{bytes / 1024.0:F1} KB";
     }
 }
