@@ -28,3 +28,14 @@ Content-Type: application/json
   "value": 65,
   "unit": "C"
 }
+
+### Upload sensor attachment
+POST {{SmartX_Api_HostAddress}}/api/attachments?sensorMacAddress=AA:BB:CC:DD:EE:FF
+Content-Type: multipart/form-data; boundary=SmartXBoundary
+
+--SmartXBoundary
+Content-Disposition: form-data; name="file"; filename="sensor-log.txt"
+Content-Type: text/plain
+
+Smart-X sensor diagnostic log test.
+--SmartXBoundary--
