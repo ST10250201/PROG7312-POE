@@ -1,7 +1,131 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Smart-X Gateway</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="container py-5">
 
-Welcome to your new app.
+    <div class="text-center mb-5">
+        <h1 class="display-5 fw-bold">
+            Smart-X Data Ingestion and Validation Gateway
+        </h1>
+
+        <p class="lead text-muted">
+            Secure IoT sensor ingestion, validation, anomaly monitoring
+            and device management.
+        </p>
+    </div>
+
+    <div class="row g-4">
+
+        <!-- Active Section -->
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-success">
+                <div class="card-body d-flex flex-column">
+
+                    <h3 class="card-title">
+                        Sensor Ingestion
+                    </h3>
+
+                    <p class="card-text">
+                        Register IoT sensors, retrieve device information,
+                        monitor telemetry, detect anomalies and review
+                        encrypted sensor attachments.
+                    </p>
+
+                    <div class="mt-auto">
+                        <span class="badge bg-success mb-3">
+                            Active
+                        </span>
+
+                        <br />
+
+                        <a href="/sensors"
+                           class="btn btn-success">
+                            Open Sensor Dashboard
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Disabled Section -->
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm opacity-75">
+                <div class="card-body d-flex flex-column">
+
+                    <h3 class="card-title">
+                        Data Processing
+                    </h3>
+
+                    <p class="card-text">
+                        Future Smart-X processing functionality for
+                        transformation and advanced processing of
+                        ingested IoT information.
+                    </p>
+
+                    <div class="mt-auto">
+                        <span class="badge bg-secondary mb-3">
+                            Coming Soon
+                        </span>
+
+                        <br />
+
+                        <button class="btn btn-secondary"
+                                disabled>
+                            Not Available
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Disabled Section -->
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm opacity-75">
+                <div class="card-body d-flex flex-column">
+
+                    <h3 class="card-title">
+                        Analytics
+                    </h3>
+
+                    <p class="card-text">
+                        Future analytical capabilities for detailed
+                        historical trends, reporting and advanced
+                        IoT insights.
+                    </p>
+
+                    <div class="mt-auto">
+                        <span class="badge bg-secondary mb-3">
+                            Coming Soon
+                        </span>
+
+                        <br />
+
+                        <button class="btn btn-secondary"
+                                disabled>
+                            Not Available
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="mt-5 p-4 bg-light rounded">
+        <h4>Current Smart-X Capabilities</h4>
+
+        <ul class="mb-0">
+            <li>IoT sensor registration and validation</li>
+            <li>Asynchronous Minimal API communication</li>
+            <li>Real-time anomaly status monitoring</li>
+            <li>Sensor dropout detection</li>
+            <li>Search and filtering</li>
+            <li>Encrypted sensor attachment storage</li>
+        </ul>
+    </div>
+
+</div>
