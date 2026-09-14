@@ -4,313 +4,448 @@
 
 <PageTitle>Smart-X Sensors</PageTitle>
 
-<h1 class="smartx-dashboard-title">Smart-X Sensor Dashboard</h1>
+<div class="container-fluid py-4 px-4">
 
-<p class="smartx-subtitle">
-    Live sensor monitoring, anomaly detection and encrypted attachment tracking.
-</p>
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
 
-@if (isLoading)
-{
-    <p>Loading Smart-X data...</p>
-}
-else if (!string.IsNullOrWhiteSpace(errorMessage))
-{
-    <div class="alert alert-danger">
-        @errorMessage
-    </div>
-}
-else
-{
-    <!-- Summary Cards -->
-    <div class="row mb-4">
+        <div>
+            <h1 class="fw-bold mb-1">
+                Smart-X Sensor Dashboard
+            </h1>
 
-        <div class="col">
-            <div class="card p-3 smartx-card">
-                <strong>Total Sensors</strong>
-                <h3>@sensors.Count</h3>
-            </div>
+            <p class="text-muted mb-0">
+                Live sensor monitoring, anomaly detection and encrypted attachment tracking.
+            </p>
         </div>
 
-        <div class="col">
-            <div class="card p-3 smartx-card">
-                <strong class="status-normal">Normal</strong>
-                <h3>@sensors.Count(s => s.Status == "Normal")</h3>
-            </div>
-        </div>
-
-        <div class="col">
-            <div class="card p-3 smartx-card">
-                <strong class="status-warning">Warnings</strong>
-                <h3>@sensors.Count(s => s.Status == "Warning")</h3>
-            </div>
-        </div>
-
-        <div class="col">
-            <div class="card p-3 smartx-card">
-                <strong class="status-critical">Critical</strong>
-                <h3>@sensors.Count(s => s.Status == "Critical")</h3>
-            </div>
-        </div>
-
-        <div class="col">
-            <div class="card p-3 smartx-card">
-                <strong class="status-offline">Offline</strong>
-                <h3>@sensors.Count(s => s.Status == "Offline")</h3>
-            </div>
-        </div>
+        <a href="/register-sensor"
+           class="btn btn-primary btn-lg">
+            + Register New Sensor
+        </a>
 
     </div>
 
-    <!-- Registered Sensors -->
-    <h3>Registered Sensors</h3>
+    <!-- STATUS CARDS -->
+    <div class="row g-4 mb-4">
 
-    <!-- Search and Filters -->
-    <div class="row mb-3">
+        <div class="col-md">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold">
+                        Total Sensors
+                    </h6>
 
-        <div class="col-md-6">
-            <input class="form-control"
-                   @bind="searchTerm"
-                   @bind:event="oninput"
-                   placeholder="Search MAC address, location, category or status" />
+                    <h2 class="fw-bold mb-0">
+                        @SensorList.Count
+                    </h2>
+                </div>
+            </div>
         </div>
 
-        <div class="col-md-3">
-            <select class="form-select"
-                    @bind="selectedCategory">
+        <div class="col-md">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold text-success">
+                        Normal
+                    </h6>
 
-                <option value="">All Categories</option>
-
-                @foreach (var category in SensorCategories)
-                {
-                    <option value="@category">
-                        @category
-                    </option>
-                }
-
-            </select>
+                    <h2 class="fw-bold mb-0">
+                        @SensorList.Count(s => s.Status == "Normal")
+                    </h2>
+                </div>
+            </div>
         </div>
 
-        <div class="col-md-3">
-            <select class="form-select"
-                    @bind="selectedStatus">
+        <div class="col-md">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold text-warning">
+                        Warnings
+                    </h6>
 
-                <option value="">All Statuses</option>
-                <option value="Normal">Normal</option>
-                <option value="Warning">Warning</option>
-                <option value="Critical">Critical</option>
-                <option value="Offline">Offline</option>
+                    <h2 class="fw-bold mb-0">
+                        @SensorList.Count(s => s.Status == "Warning")
+                    </h2>
+                </div>
+            </div>
+        </div>
 
-            </select>
+        <div class="col-md">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold text-danger">
+                        Critical
+                    </h6>
+
+                    <h2 class="fw-bold mb-0">
+                        @SensorList.Count(s => s.Status == "Critical")
+                    </h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold text-secondary">
+                        Offline
+                    </h6>
+
+                    <h2 class="fw-bold mb-0">
+                        @SensorList.Count(s => s.Status == "Offline")
+                    </h2>
+                </div>
+            </div>
         </div>
 
     </div>
 
-    @if (sensors.Count == 0)
-    {
-        <div class="alert alert-info">
-            No sensors are currently registered.
+    <!-- REGISTERED SENSOR SECTION -->
+    <div class="card border-0 shadow-sm mb-4">
+
+        <div class="card-body">
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+
+                <h3 class="fw-bold mb-0">
+                    Registered Sensors
+                </h3>
+
+                <a href="/register-sensor"
+                   class="btn btn-success">
+                    + Register Sensor
+                </a>
+
+            </div>
+
+            <!-- FILTERS -->
+            <div class="row g-3 mb-4">
+
+                <div class="col-md-6">
+
+                    <input class="form-control"
+                           placeholder="Search MAC address, location, category or status"
+                           @bind="SearchText"
+                           @bind:event="oninput" />
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <select class="form-select"
+                            @bind="SelectedCategory">
+
+                        <option value="">
+                            All Categories
+                        </option>
+
+                        <option value="Temperature">
+                            Temperature
+                        </option>
+
+                        <option value="Humidity">
+                            Humidity
+                        </option>
+
+                        <option value="Pressure">
+                            Pressure
+                        </option>
+
+                        <option value="Air Quality">
+                            Air Quality
+                        </option>
+
+                        <option value="Motion">
+                            Motion
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <select class="form-select"
+                            @bind="SelectedStatus">
+
+                        <option value="">
+                            All Statuses
+                        </option>
+
+                        <option value="Normal">
+                            Normal
+                        </option>
+
+                        <option value="Warning">
+                            Warning
+                        </option>
+
+                        <option value="Critical">
+                            Critical
+                        </option>
+
+                        <option value="Offline">
+                            Offline
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+            @if (isLoading)
+            {
+                <div class="alert alert-info">
+                    Loading Smart-X sensor information...
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-danger">
+                    @errorMessage
+                </div>
+            }
+            else if (!FilteredSensors.Any())
+            {
+                <div class="alert alert-info mb-0">
+                    No sensors are currently registered.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+
+                    <table class="table table-hover align-middle">
+
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>MAC Address</th>
+                                <th>Location</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>Last Seen</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            @foreach (SensorRecord sensor in FilteredSensors)
+                            {
+                                <tr>
+
+                                    <td>
+                                        @sensor.Id
+                                    </td>
+
+                                    <td>
+                                        <code>
+                                            @sensor.MacAddress
+                                        </code>
+                                    </td>
+
+                                    <td>
+                                        @sensor.Location
+                                    </td>
+
+                                    <td>
+                                        @sensor.Category
+                                    </td>
+
+                                    <td>
+                                        <span class="@GetStatusClass(sensor.Status)">
+                                            @sensor.Status
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        @sensor.LastSeen
+                                        .ToLocalTime()
+                                        .ToString("yyyy-MM-dd HH:mm:ss")
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+            }
+
         </div>
-    }
-    else if (!FilteredSensors.Any())
-    {
-        <div class="alert alert-warning">
-            No sensors match the selected filters.
-        </div>
-    }
-    else
-    {
-        <div class="table-responsive">
 
-            <table class="table table-hover align-middle">
+    </div>
 
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>MAC Address</th>
-                        <th>Location</th>
-                        <th>Category</th>
-                        <th>Status</th>
-                        <th>Last Seen</th>
-                    </tr>
-                </thead>
+    <!-- ATTACHMENTS -->
+    <div class="card border-0 shadow-sm">
 
-                <tbody>
+        <div class="card-body">
 
-                    @foreach (var sensor in FilteredSensors)
-                    {
-                        <tr>
+            <h3 class="fw-bold mb-3">
+                Encrypted Sensor Attachments
+            </h3>
 
-                            <td>@sensor.Id</td>
+            @if (Attachments.Count == 0)
+            {
+                <div class="alert alert-secondary mb-0">
+                    No sensor attachments have been uploaded.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
 
-                            <td>@sensor.MacAddress</td>
+                    <table class="table table-hover align-middle">
 
-                            <td>@sensor.Location</td>
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Sensor</th>
+                                <th>Original File</th>
+                                <th>Stored File</th>
+                                <th>Content Type</th>
+                                <th>Uploaded</th>
+                            </tr>
+                        </thead>
 
-                            <td>@sensor.Category</td>
+                        <tbody>
 
-                            <td>
-                                <span class="@GetStatusClass(sensor.Status)">
-                                    @sensor.Status
-                                </span>
-                            </td>
+                            @foreach (SensorAttachment attachment in Attachments)
+                            {
+                                <tr>
 
-                            <td>
-                                @sensor.LastSeen
-                                .ToLocalTime()
-                                .ToString("yyyy-MM-dd HH:mm:ss")
-                            </td>
+                                    <td>
+                                        @attachment.Id
+                                    </td>
 
-                        </tr>
-                    }
+                                    <td>
+                                        <code>
+                                            @attachment.SensorMacAddress
+                                        </code>
+                                    </td>
 
-                </tbody>
+                                    <td>
+                                        @attachment.OriginalFileName
+                                    </td>
 
-            </table>
+                                    <td>
+                                        @attachment.StoredFileName
+                                    </td>
 
-        </div>
-    }
+                                    <td>
+                                        @attachment.ContentType
+                                    </td>
 
-    <hr />
+                                    <td>
+                                        @attachment.UploadedAt
+                                        .ToLocalTime()
+                                        .ToString("yyyy-MM-dd HH:mm:ss")
+                                    </td>
 
-    <!-- Encrypted Attachments -->
-    <h3>Encrypted Sensor Attachments</h3>
+                                </tr>
+                            }
 
-    @if (attachments.Count == 0)
-    {
-        <div class="alert alert-secondary">
-            No sensor attachments have been uploaded.
-        </div>
-    }
-    else
-    {
-        <div class="table-responsive">
+                        </tbody>
 
-            <table class="table table-bordered align-middle">
+                    </table>
 
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Sensor MAC</th>
-                        <th>Original File</th>
-                        <th>Content Type</th>
-                        <th>File Size</th>
-                        <th>Uploaded</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-
-                    @foreach (var attachment in attachments)
-                    {
-                        <tr>
-
-                            <td>@attachment.Id</td>
-
-                            <td>@attachment.SensorMacAddress</td>
-
-                            <td>@attachment.OriginalFileName</td>
-
-                            <td>@attachment.ContentType</td>
-
-                            <td>@FormatFileSize(attachment.FileSize)</td>
-
-                            <td>
-                                @attachment.UploadedAt
-                                .ToLocalTime()
-                                .ToString("yyyy-MM-dd HH:mm:ss")
-                            </td>
-
-                        </tr>
-                    }
-
-                </tbody>
-
-            </table>
+                </div>
+            }
 
         </div>
-    }
-}
+
+    </div>
+
+</div>
 
 @code {
 
-    private List<SensorRecord> sensors = new();
+    private List<SensorRecord> SensorList { get; set; } = new();
 
-    private List<SensorAttachment> attachments = new();
+    private List<SensorAttachment> Attachments { get; set; } = new();
+
+    private string SearchText { get; set; } = string.Empty;
+
+    private string SelectedCategory { get; set; } = string.Empty;
+
+    private string SelectedStatus { get; set; } = string.Empty;
 
     private bool isLoading = true;
 
     private string errorMessage = string.Empty;
 
-    private string searchTerm = string.Empty;
 
-    private string selectedCategory = string.Empty;
-
-    private string selectedStatus = string.Empty;
-
-
-    private IEnumerable<string> SensorCategories =>
-        sensors
-            .Select(s => s.Category)
-            .Distinct()
-            .OrderBy(c => c);
-
-
-    private IEnumerable<SensorRecord> FilteredSensors =>
-        sensors.Where(sensor =>
+    private IEnumerable<SensorRecord> FilteredSensors
+    {
+        get
         {
-            bool matchesSearch =
-                string.IsNullOrWhiteSpace(searchTerm) ||
+            IEnumerable<SensorRecord> result = SensorList;
 
-                sensor.MacAddress.Contains(
-                    searchTerm,
-                    StringComparison.OrdinalIgnoreCase) ||
+            if (!string.IsNullOrWhiteSpace(SearchText))
+            {
+                result = result.Where(sensor =>
+                    sensor.MacAddress.Contains(
+                        SearchText,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    sensor.Location.Contains(
+                        SearchText,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    sensor.Category.Contains(
+                        SearchText,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    sensor.Status.Contains(
+                        SearchText,
+                        StringComparison.OrdinalIgnoreCase));
+            }
 
-                sensor.Location.Contains(
-                    searchTerm,
-                    StringComparison.OrdinalIgnoreCase) ||
+            if (!string.IsNullOrWhiteSpace(SelectedCategory))
+            {
+                result = result.Where(sensor =>
+                    sensor.Category.Equals(
+                        SelectedCategory,
+                        StringComparison.OrdinalIgnoreCase));
+            }
 
-                sensor.Category.Contains(
-                    searchTerm,
-                    StringComparison.OrdinalIgnoreCase) ||
+            if (!string.IsNullOrWhiteSpace(SelectedStatus))
+            {
+                result = result.Where(sensor =>
+                    sensor.Status.Equals(
+                        SelectedStatus,
+                        StringComparison.OrdinalIgnoreCase));
+            }
 
-                sensor.Status.Contains(
-                    searchTerm,
-                    StringComparison.OrdinalIgnoreCase);
-
-
-            bool matchesCategory =
-                string.IsNullOrWhiteSpace(selectedCategory) ||
-
-                sensor.Category.Equals(
-                    selectedCategory,
-                    StringComparison.OrdinalIgnoreCase);
-
-
-            bool matchesStatus =
-                string.IsNullOrWhiteSpace(selectedStatus) ||
-
-                sensor.Status.Equals(
-                    selectedStatus,
-                    StringComparison.OrdinalIgnoreCase);
-
-
-            return matchesSearch &&
-                   matchesCategory &&
-                   matchesStatus;
-        });
+            return result;
+        }
+    }
 
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadDashboardAsync();
+    }
+
+
+    private async Task LoadDashboardAsync()
+    {
         try
         {
-            sensors =
+            isLoading = true;
+
+            errorMessage = string.Empty;
+
+            SensorList =
                 await Http.GetFromJsonAsync<List<SensorRecord>>(
                     "api/sensors")
                 ?? new List<SensorRecord>();
 
-            attachments =
+            Attachments =
                 await Http.GetFromJsonAsync<List<SensorAttachment>>(
                     "api/attachments")
                 ?? new List<SensorAttachment>();
@@ -327,7 +462,7 @@ else
     }
 
 
-    private string GetStatusClass(string status)
+    private static string GetStatusClass(string status)
     {
         return status switch
         {
@@ -344,18 +479,7 @@ else
                 "badge bg-secondary",
 
             _ =>
-                "badge bg-light text-dark"
+                "badge bg-dark"
         };
-    }
-
-
-    private string FormatFileSize(long bytes)
-    {
-        if (bytes < 1024)
-        {
-            return $"{bytes} B";
-        }
-
-        return $"{bytes / 1024.0:F1} KB";
     }
 }
