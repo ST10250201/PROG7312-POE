@@ -30,6 +30,7 @@ app.UseCors("AllowSmartXWeb");
 
 var sensors = new List<SensorRecord>();
 var telemetryHistory = new List<TelemetryInput>();
+var attachments = new List<SensorAttachment>();
 
 app.MapGet("/", () =>
 {
@@ -148,6 +149,59 @@ app.MapPost("/api/telemetry", (TelemetryInput telemetry) =>
 app.MapGet("/api/telemetry", () =>
 {
     return Results.Ok(telemetryHistory);
+});
+
+app.MapPost("/api/attachments",
+    async (
+        IFormFile file,
+        string sensorMacAddress,
+        SmartX.Api.Services.FileUploadService fileUploadService) =>
+    {
+        SensorRecord? sensor = sensors.FirstOrDefault(s =>
+            s.MacAddress.Equals(
+                sensorMacAddress,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (sensor == null)
+        {
+            return Results.NotFound(new
+            {
+                message = "The specified sensor could not be found."
+            });
+        }
+
+        try
+        {
+            SensorAttachment attachment =
+                await fileUploadService.SaveEncryptedAsync(
+                    file,
+                    sensorMacAddress);
+
+            attachment.Id = attachments.Count == 0
+                ? 1
+                : attachments.Max(a => a.Id) + 1;
+
+            attachments.Add(attachment);
+
+            return Results.Ok(new
+            {
+                message = "File uploaded and encrypted successfully.",
+                attachment
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    })
+    .DisableAntiforgery();
+
+app.MapGet("/api/attachments", () =>
+{
+    return Results.Ok(attachments);
 });
 
 app.Run();
