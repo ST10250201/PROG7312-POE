@@ -1,0 +1,84 @@
+﻿@model SmartX.Web.Models.Sensor
+
+@{
+    ViewData["Title"] = "Register Sensor";
+}
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-7">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="mb-3">Register Sensor</h2>
+
+                    <p class="text-muted">
+                        Add a new IoT sensor to the Smart-X Data Ingestion and Validation Gateway.
+                    </p>
+
+                    <form asp-action="Create" method="post">
+                        <div asp-validation-summary="ModelOnly"
+                             class="text-danger mb-3"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="MacAddress"
+                                   class="form-label"></label>
+
+                            <input asp-for="MacAddress"
+                                   class="form-control"
+                                   placeholder="Example: AA:BB:CC:DD:EE:FF" />
+
+                            <span asp-validation-for="MacAddress"
+                                  class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Location"
+                                   class="form-label"></label>
+
+                            <input asp-for="Location"
+                                   class="form-control"
+                                   placeholder="Example: Greenhouse Zone A" />
+
+                            <span asp-validation-for="Location"
+                                  class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Category"
+                                   class="form-label"></label>
+
+                            <select asp-for="Category"
+                                    class="form-select">
+                                <option value="">-- Select sensor category --</option>
+                                <option value="Temperature">Temperature</option>
+                                <option value="Humidity">Humidity</option>
+                                <option value="Pressure">Pressure</option>
+                                <option value="Air Quality">Air Quality</option>
+                                <option value="Motion">Motion</option>
+                            </select>
+
+                            <span asp-validation-for="Category"
+                                  class="text-danger"></span>
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-primary">
+                            Register Sensor
+                        </button>
+
+                        <a asp-action="Index"
+                           class="btn btn-outline-secondary ms-2">
+                            View Sensors
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
