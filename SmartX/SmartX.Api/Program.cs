@@ -1,11 +1,15 @@
 using SmartX.Api.Models;
+using SmartX.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// OpenAPI
 builder.Services.AddOpenApi();
 
-builder.Services.AddSingleton<SmartX.Api.Services.FileUploadService>();
+// File encryption/upload service
+builder.Services.AddSingleton<FileUploadService>();
 
+// CORS allows the Blazor WebAssembly client to communicate with the API
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowSmartXWeb", policy =>
@@ -28,9 +32,21 @@ app.UseHttpsRedirection();
 
 app.UseCors("AllowSmartXWeb");
 
+// -------------------------------------------------------
+// In-memory Smart-X data stores
+// -------------------------------------------------------
+
 var sensors = new List<SensorRecord>();
+
 var telemetryHistory = new List<TelemetryInput>();
+
 var attachments = new List<SensorAttachment>();
+
+var telemetryPackets = new List<TelemetryPacket<double>>();
+
+// -------------------------------------------------------
+// Root endpoint
+// -------------------------------------------------------
 
 app.MapGet("/", () =>
 {
@@ -40,11 +56,19 @@ app.MapGet("/", () =>
     });
 });
 
+// -------------------------------------------------------
+// SENSOR ENDPOINTS
+// -------------------------------------------------------
+
+// Retrieve all registered sensors
 app.MapGet("/api/sensors", () =>
 {
+    // A sensor that has not communicated for two minutes
+    // is considered offline.
     foreach (var sensor in sensors)
     {
-        if (DateTime.UtcNow - sensor.LastSeen > TimeSpan.FromMinutes(2))
+        if (DateTime.UtcNow - sensor.LastSeen >
+            TimeSpan.FromMinutes(2))
         {
             sensor.Status = "Offline";
         }
@@ -53,6 +77,7 @@ app.MapGet("/api/sensors", () =>
     return Results.Ok(sensors);
 });
 
+// Register a new sensor
 app.MapPost("/api/sensors", (SensorRecord sensor) =>
 {
     if (string.IsNullOrWhiteSpace(sensor.MacAddress))
@@ -88,7 +113,8 @@ app.MapPost("/api/sensors", (SensorRecord sensor) =>
     {
         return Results.Conflict(new
         {
-            message = "A sensor with this MAC address is already registered."
+            message =
+                "A sensor with this MAC address is already registered."
         });
     }
 
@@ -97,6 +123,7 @@ app.MapPost("/api/sensors", (SensorRecord sensor) =>
         : sensors.Max(s => s.Id) + 1;
 
     sensor.Status = "Normal";
+
     sensor.LastSeen = DateTime.UtcNow;
 
     sensors.Add(sensor);
@@ -106,6 +133,11 @@ app.MapPost("/api/sensors", (SensorRecord sensor) =>
         sensor);
 });
 
+// -------------------------------------------------------
+// TELEMETRY ENDPOINTS
+// -------------------------------------------------------
+
+// Receive telemetry from a registered sensor
 app.MapPost("/api/telemetry", (TelemetryInput telemetry) =>
 {
     SensorRecord? sensor = sensors.FirstOrDefault(s =>
@@ -121,10 +153,27 @@ app.MapPost("/api/telemetry", (TelemetryInput telemetry) =>
         });
     }
 
+    // Store the original telemetry request
     telemetryHistory.Add(telemetry);
 
+    // Store the telemetry using the generic telemetry model
+    var packet = new TelemetryPacket<double>
+    {
+        MacAddress = telemetry.MacAddress,
+        DataType = telemetry.DataType,
+        Value = telemetry.Value,
+        Unit = telemetry.Unit,
+        Timestamp = DateTime.UtcNow,
+        IsValid = true,
+        ValidationMessage = "Telemetry accepted"
+    };
+
+    telemetryPackets.Add(packet);
+
+    // Update sensor activity timestamp
     sensor.LastSeen = DateTime.UtcNow;
 
+    // Apply Smart-X anomaly status rules
     if (telemetry.Value >= 80)
     {
         sensor.Status = "Critical";
@@ -142,20 +191,58 @@ app.MapPost("/api/telemetry", (TelemetryInput telemetry) =>
     {
         message = "Telemetry received successfully.",
         sensorStatus = sensor.Status,
-        telemetry
+        telemetry,
+        packet
     });
 });
 
+// Retrieve telemetry history
 app.MapGet("/api/telemetry", () =>
 {
     return Results.Ok(telemetryHistory);
 });
 
-app.MapPost("/api/attachments",
+// Retrieve generic telemetry packets
+app.MapGet("/api/telemetry/packets", () =>
+{
+    return Results.Ok(telemetryPackets);
+});
+
+// Demonstrates operator overloading by aggregating
+// the first two telemetry packets.
+app.MapGet("/api/telemetry/aggregate", () =>
+{
+    if (telemetryPackets.Count < 2)
+    {
+        return Results.BadRequest(new
+        {
+            message =
+                "At least two telemetry packets are required for aggregation."
+        });
+    }
+
+    TelemetryPacket<double> combined =
+        telemetryPackets[0] + telemetryPackets[1];
+
+    return Results.Ok(new
+    {
+        message =
+            "Telemetry packets aggregated using the overloaded + operator.",
+        combined
+    });
+});
+
+// -------------------------------------------------------
+// ATTACHMENT ENDPOINTS
+// -------------------------------------------------------
+
+// Upload and encrypt an attachment for a registered sensor
+app.MapPost(
+    "/api/attachments",
     async (
         IFormFile file,
         string sensorMacAddress,
-        SmartX.Api.Services.FileUploadService fileUploadService) =>
+        FileUploadService fileUploadService) =>
     {
         SensorRecord? sensor = sensors.FirstOrDefault(s =>
             s.MacAddress.Equals(
@@ -166,7 +253,8 @@ app.MapPost("/api/attachments",
         {
             return Results.NotFound(new
             {
-                message = "The specified sensor could not be found."
+                message =
+                    "The specified sensor could not be found."
             });
         }
 
@@ -185,7 +273,8 @@ app.MapPost("/api/attachments",
 
             return Results.Ok(new
             {
-                message = "File uploaded and encrypted successfully.",
+                message =
+                    "File uploaded and encrypted successfully.",
                 attachment
             });
         }
@@ -199,9 +288,14 @@ app.MapPost("/api/attachments",
     })
     .DisableAntiforgery();
 
+// Retrieve attachment metadata
 app.MapGet("/api/attachments", () =>
 {
     return Results.Ok(attachments);
 });
+
+// -------------------------------------------------------
+// Start Smart-X API
+// -------------------------------------------------------
 
 app.Run();
