@@ -1,6 +1,30 @@
-@SmartX.Api_HostAddress = http://localhost:5203
+@SmartX_Api_HostAddress = https://localhost:7199
 
-GET {{SmartX.Api_HostAddress}}/weatherforecast/
+### Get all sensors
+GET {{SmartX_Api_HostAddress}}/api/sensors
 Accept: application/json
 
 ###
+
+### Create a sensor
+POST {{SmartX_Api_HostAddress}}/api/sensors
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:FF",
+  "location": "Greenhouse Zone A",
+  "category": "Temperature"
+}
+
+###
+
+### Send telemetry
+POST {{SmartX_Api_HostAddress}}/api/telemetry
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:FF",
+  "dataType": "Temperature",
+  "value": 85,
+  "unit": "C"
+}
