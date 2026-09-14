@@ -278,6 +278,42 @@ The repository contains incremental commits documenting the development of the S
 
 ---
 
+## Quick Start Commands
+
+From the Smart-X solution directory, restore all project dependencies:
+
+```bash
+dotnet restore
+```
+
+Compile the complete solution:
+
+```bash
+dotnet build
+```
+
+To start the backend API separately:
+
+```bash
+dotnet run --project SmartX.Api
+```
+
+The API will use the development addresses configured in:
+
+```text
+SmartX.Api/Properties/launchSettings.json
+```
+
+To run the Blazor WebAssembly client separately:
+
+```bash
+dotnet run --project SmartX.Client
+```
+
+For normal development and demonstration, the API and client can also be configured as multiple startup projects in Visual Studio and launched together.
+
+The backend API must be running while using functionality in the Smart-X client that communicates with API endpoints.
+
 ## Author
 
 Developed for the PROG7312 Portfolio of Evidence.
