@@ -4,6 +4,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 
+builder.Services.AddSingleton<SmartX.Api.Services.FileUploadService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowSmartXWeb", policy =>
