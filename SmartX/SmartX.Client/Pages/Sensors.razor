@@ -4,9 +4,11 @@
 
 <PageTitle>Smart-X Sensors</PageTitle>
 
-<h1>Smart-X Sensor Dashboard</h1>
+<h1 class="smartx-dashboard-title">Smart-X Sensor Dashboard</h1>
 
-<p>Live sensor records retrieved from the Smart-X Minimal API.</p>
+<p class="smartx-subtitle">
+    Live sensor monitoring, anomaly detection and encrypted attachment tracking.
+</p>
 
 @if (isLoading)
 {
@@ -22,45 +24,48 @@ else
 {
     <!-- Summary Cards -->
     <div class="row mb-4">
+
         <div class="col">
-            <div class="card p-3">
+            <div class="card p-3 smartx-card">
                 <strong>Total Sensors</strong>
                 <h3>@sensors.Count</h3>
             </div>
         </div>
 
         <div class="col">
-            <div class="card p-3">
-                <strong>Normal</strong>
+            <div class="card p-3 smartx-card">
+                <strong class="status-normal">Normal</strong>
                 <h3>@sensors.Count(s => s.Status == "Normal")</h3>
             </div>
         </div>
 
         <div class="col">
-            <div class="card p-3">
-                <strong>Warnings</strong>
+            <div class="card p-3 smartx-card">
+                <strong class="status-warning">Warnings</strong>
                 <h3>@sensors.Count(s => s.Status == "Warning")</h3>
             </div>
         </div>
 
         <div class="col">
-            <div class="card p-3">
-                <strong>Critical</strong>
+            <div class="card p-3 smartx-card">
+                <strong class="status-critical">Critical</strong>
                 <h3>@sensors.Count(s => s.Status == "Critical")</h3>
             </div>
         </div>
 
         <div class="col">
-            <div class="card p-3">
-                <strong>Offline</strong>
+            <div class="card p-3 smartx-card">
+                <strong class="status-offline">Offline</strong>
                 <h3>@sensors.Count(s => s.Status == "Offline")</h3>
             </div>
         </div>
+
     </div>
 
+    <!-- Registered Sensors -->
     <h3>Registered Sensors</h3>
 
-    <!-- Search and Filtering -->
+    <!-- Search and Filters -->
     <div class="row mb-3">
 
         <div class="col-md-6">
@@ -116,6 +121,7 @@ else
     else
     {
         <div class="table-responsive">
+
             <table class="table table-hover align-middle">
 
                 <thead>
@@ -161,11 +167,13 @@ else
                 </tbody>
 
             </table>
+
         </div>
     }
 
     <hr />
 
+    <!-- Encrypted Attachments -->
     <h3>Encrypted Sensor Attachments</h3>
 
     @if (attachments.Count == 0)

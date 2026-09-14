@@ -87,3 +87,46 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+.smartx-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    background: #ffffff;
+}
+
+    .smartx-card h3 {
+        margin-top: 8px;
+        margin-bottom: 0;
+        font-weight: 700;
+    }
+
+.smartx-dashboard-title {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.smartx-subtitle {
+    color: #6c757d;
+    margin-bottom: 24px;
+}
+
+.status-normal {
+    color: #198754;
+    font-weight: 700;
+}
+
+.status-warning {
+    color: #fd7e14;
+    font-weight: 700;
+}
+
+.status-critical {
+    color: #dc3545;
+    font-weight: 700;
+}
+
+.status-offline {
+    color: #6c757d;
+    font-weight: 700;
+}
