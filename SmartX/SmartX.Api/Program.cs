@@ -3,13 +3,12 @@ using SmartX.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// OpenAPI
 builder.Services.AddOpenApi();
 
-// File encryption/upload service
 builder.Services.AddSingleton<FileUploadService>();
 
-// CORS allows the Blazor WebAssembly client to communicate with the API
+builder.Services.AddSingleton<SensorRegistry>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowSmartXWeb", policy =>
@@ -33,19 +32,17 @@ app.UseHttpsRedirection();
 app.UseCors("AllowSmartXWeb");
 
 // -------------------------------------------------------
-// In-memory Smart-X data stores
+// Smart-X in-memory stores
 // -------------------------------------------------------
-
-var sensors = new List<SensorRecord>();
 
 var telemetryHistory = new List<TelemetryInput>();
 
-var attachments = new List<SensorAttachment>();
-
 var telemetryPackets = new List<TelemetryPacket<double>>();
 
+var attachments = new List<SensorAttachment>();
+
 // -------------------------------------------------------
-// Root endpoint
+// Root
 // -------------------------------------------------------
 
 app.MapGet("/", () =>
@@ -60,156 +57,143 @@ app.MapGet("/", () =>
 // SENSOR ENDPOINTS
 // -------------------------------------------------------
 
-// Retrieve all registered sensors
-app.MapGet("/api/sensors", () =>
-{
-    // A sensor that has not communicated for two minutes
-    // is considered offline.
-    foreach (var sensor in sensors)
+app.MapGet(
+    "/api/sensors",
+    (SensorRegistry registry) =>
     {
-        if (DateTime.UtcNow - sensor.LastSeen >
-            TimeSpan.FromMinutes(2))
+        foreach (var sensor in registry.GetAll())
         {
-            sensor.Status = "Offline";
+            if (DateTime.UtcNow - sensor.LastSeen >
+                TimeSpan.FromMinutes(2))
+            {
+                sensor.Status = "Offline";
+            }
         }
-    }
 
-    return Results.Ok(sensors);
-});
+        return Results.Ok(registry.GetAll());
+    });
 
-// Register a new sensor
-app.MapPost("/api/sensors", (SensorRecord sensor) =>
-{
-    if (string.IsNullOrWhiteSpace(sensor.MacAddress))
+app.MapPost(
+    "/api/sensors",
+    (SensorRecord sensor, SensorRegistry registry) =>
     {
-        return Results.BadRequest(new
+        if (string.IsNullOrWhiteSpace(sensor.MacAddress))
         {
-            message = "MAC address is required."
-        });
-    }
+            return Results.BadRequest(new
+            {
+                message = "MAC address is required."
+            });
+        }
 
-    if (string.IsNullOrWhiteSpace(sensor.Location))
-    {
-        return Results.BadRequest(new
+        if (string.IsNullOrWhiteSpace(sensor.Location))
         {
-            message = "Deployment location is required."
-        });
-    }
+            return Results.BadRequest(new
+            {
+                message = "Deployment location is required."
+            });
+        }
 
-    if (string.IsNullOrWhiteSpace(sensor.Category))
-    {
-        return Results.BadRequest(new
+        if (string.IsNullOrWhiteSpace(sensor.Category))
         {
-            message = "Sensor category is required."
-        });
-    }
+            return Results.BadRequest(new
+            {
+                message = "Sensor category is required."
+            });
+        }
 
-    bool duplicateMac = sensors.Any(s =>
-        s.MacAddress.Equals(
-            sensor.MacAddress,
-            StringComparison.OrdinalIgnoreCase));
-
-    if (duplicateMac)
-    {
-        return Results.Conflict(new
+        if (registry.ContainsMacAddress(sensor.MacAddress))
         {
-            message =
-                "A sensor with this MAC address is already registered."
-        });
-    }
+            return Results.Conflict(new
+            {
+                message =
+                    "A sensor with this MAC address is already registered."
+            });
+        }
 
-    sensor.Id = sensors.Count == 0
-        ? 1
-        : sensors.Max(s => s.Id) + 1;
+        sensor.Id = registry.GenerateNextId();
 
-    sensor.Status = "Normal";
+        sensor.Status = "Normal";
 
-    sensor.LastSeen = DateTime.UtcNow;
+        sensor.LastSeen = DateTime.UtcNow;
 
-    sensors.Add(sensor);
+        registry.Add(sensor);
 
-    return Results.Created(
-        $"/api/sensors/{sensor.Id}",
-        sensor);
-});
+        return Results.Created(
+            $"/api/sensors/{sensor.Id}",
+            sensor);
+    });
 
 // -------------------------------------------------------
 // TELEMETRY ENDPOINTS
 // -------------------------------------------------------
 
-// Receive telemetry from a registered sensor
-app.MapPost("/api/telemetry", (TelemetryInput telemetry) =>
-{
-    SensorRecord? sensor = sensors.FirstOrDefault(s =>
-        s.MacAddress.Equals(
-            telemetry.MacAddress,
-            StringComparison.OrdinalIgnoreCase));
-
-    if (sensor == null)
+app.MapPost(
+    "/api/telemetry",
+    (
+        TelemetryInput telemetry,
+        SensorRegistry registry) =>
     {
-        return Results.NotFound(new
+        SensorRecord? sensor =
+            registry.FindByMacAddress(
+                telemetry.MacAddress);
+
+        if (sensor == null)
         {
-            message = "Sensor could not be found."
+            return Results.NotFound(new
+            {
+                message = "Sensor could not be found."
+            });
+        }
+
+        telemetryHistory.Add(telemetry);
+
+        var packet = new TelemetryPacket<double>
+        {
+            MacAddress = telemetry.MacAddress,
+            DataType = telemetry.DataType,
+            Value = telemetry.Value,
+            Unit = telemetry.Unit,
+            Timestamp = DateTime.UtcNow,
+            IsValid = true,
+            ValidationMessage = "Telemetry accepted"
+        };
+
+        telemetryPackets.Add(packet);
+
+        sensor.LastSeen = DateTime.UtcNow;
+
+        if (telemetry.Value >= 80)
+        {
+            sensor.Status = "Critical";
+        }
+        else if (telemetry.Value >= 60)
+        {
+            sensor.Status = "Warning";
+        }
+        else
+        {
+            sensor.Status = "Normal";
+        }
+
+        return Results.Ok(new
+        {
+            message = "Telemetry received successfully.",
+            sensorStatus = sensor.Status,
+            telemetry,
+            packet
         });
-    }
-
-    // Store the original telemetry request
-    telemetryHistory.Add(telemetry);
-
-    // Store the telemetry using the generic telemetry model
-    var packet = new TelemetryPacket<double>
-    {
-        MacAddress = telemetry.MacAddress,
-        DataType = telemetry.DataType,
-        Value = telemetry.Value,
-        Unit = telemetry.Unit,
-        Timestamp = DateTime.UtcNow,
-        IsValid = true,
-        ValidationMessage = "Telemetry accepted"
-    };
-
-    telemetryPackets.Add(packet);
-
-    // Update sensor activity timestamp
-    sensor.LastSeen = DateTime.UtcNow;
-
-    // Apply Smart-X anomaly status rules
-    if (telemetry.Value >= 80)
-    {
-        sensor.Status = "Critical";
-    }
-    else if (telemetry.Value >= 60)
-    {
-        sensor.Status = "Warning";
-    }
-    else
-    {
-        sensor.Status = "Normal";
-    }
-
-    return Results.Ok(new
-    {
-        message = "Telemetry received successfully.",
-        sensorStatus = sensor.Status,
-        telemetry,
-        packet
     });
-});
 
-// Retrieve telemetry history
 app.MapGet("/api/telemetry", () =>
 {
     return Results.Ok(telemetryHistory);
 });
 
-// Retrieve generic telemetry packets
 app.MapGet("/api/telemetry/packets", () =>
 {
     return Results.Ok(telemetryPackets);
 });
 
-// Demonstrates operator overloading by aggregating
-// the first two telemetry packets.
 app.MapGet("/api/telemetry/aggregate", () =>
 {
     if (telemetryPackets.Count < 2)
@@ -236,18 +220,17 @@ app.MapGet("/api/telemetry/aggregate", () =>
 // ATTACHMENT ENDPOINTS
 // -------------------------------------------------------
 
-// Upload and encrypt an attachment for a registered sensor
 app.MapPost(
     "/api/attachments",
     async (
         IFormFile file,
         string sensorMacAddress,
-        FileUploadService fileUploadService) =>
+        FileUploadService fileUploadService,
+        SensorRegistry registry) =>
     {
-        SensorRecord? sensor = sensors.FirstOrDefault(s =>
-            s.MacAddress.Equals(
-                sensorMacAddress,
-                StringComparison.OrdinalIgnoreCase));
+        SensorRecord? sensor =
+            registry.FindByMacAddress(
+                sensorMacAddress);
 
         if (sensor == null)
         {
@@ -288,14 +271,9 @@ app.MapPost(
     })
     .DisableAntiforgery();
 
-// Retrieve attachment metadata
 app.MapGet("/api/attachments", () =>
 {
     return Results.Ok(attachments);
 });
-
-// -------------------------------------------------------
-// Start Smart-X API
-// -------------------------------------------------------
 
 app.Run();
