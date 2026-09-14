@@ -15,6 +15,8 @@ builder.Services.AddSingleton<SensorRegistry>();
 
 builder.Services.AddSingleton<DeploymentZoneService>();
 
+builder.Services.AddSingleton<RecursiveValidationService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowSmartXWeb", policy =>
@@ -284,6 +286,7 @@ app.MapGet("/api/attachments", () =>
 
 // -------------------------------------------------------
 // DEPLOYMENT ZONE ENDPOINT
+// Jagged array converted to List<string>
 // -------------------------------------------------------
 
 app.MapGet(
@@ -306,6 +309,40 @@ app.MapGet(
             message =
                 "Jagged deployment-zone array converted to List<string>.",
             zones = zoneList
+        });
+    });
+
+// -------------------------------------------------------
+// RECURSIVE VALIDATION ENDPOINT
+// -------------------------------------------------------
+
+app.MapGet(
+    "/api/validate-deployment",
+    (
+        DeploymentZoneService zoneService,
+        RecursiveValidationService validationService) =>
+    {
+        string[][] deploymentZones =
+        {
+            new[] { "Greenhouse", "Hydroponics" },
+            new[] { "Utility", "Storage" },
+            new[] { "Production", "Testing" }
+        };
+
+        List<string> zones =
+            zoneService.ConvertJaggedArrayToList(
+                deploymentZones);
+
+        bool isValid =
+            validationService.ValidateHierarchy(
+                zones);
+
+        return Results.Ok(new
+        {
+            message =
+                "Recursive deployment validation completed.",
+            isValid,
+            zones
         });
     });
 
