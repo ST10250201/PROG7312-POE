@@ -1,0 +1,209 @@
+﻿@page "/register-sensor"
+@using SmartX.Client.Models
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Register Sensor</PageTitle>
+
+<div class="container py-4">
+
+    <div class="row justify-content-center">
+
+        <div class="col-lg-7">
+
+            <div class="card shadow-sm">
+
+                <div class="card-body p-4">
+
+                    <h2 class="mb-2">
+                        Register IoT Sensor
+                    </h2>
+
+                    <p class="text-muted mb-4">
+                        Register a sensor with the Smart-X Data Ingestion
+                        and Validation Gateway.
+                    </p>
+
+                    @if (!string.IsNullOrWhiteSpace(errorMessage))
+                    {
+                        <div class="alert alert-danger">
+                            @errorMessage
+                        </div>
+                    }
+
+                    <div class="mb-3">
+
+                        <label class="form-label">
+                            MAC Address
+                        </label>
+
+                        <input class="form-control"
+                               @bind="sensor.MacAddress"
+                               placeholder="AA:BB:CC:DD:EE:FF" />
+
+                        @if (showValidation &&
+                             string.IsNullOrWhiteSpace(sensor.MacAddress))
+                        {
+                            <div class="text-danger mt-1">
+                                MAC address is required.
+                            </div>
+                        }
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label class="form-label">
+                            Deployment Location
+                        </label>
+
+                        <input class="form-control"
+                               @bind="sensor.Location"
+                               placeholder="Example: Greenhouse Zone A" />
+
+                        @if (showValidation &&
+                             string.IsNullOrWhiteSpace(sensor.Location))
+                        {
+                            <div class="text-danger mt-1">
+                                Deployment location is required.
+                            </div>
+                        }
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label class="form-label">
+                            Sensor Category
+                        </label>
+
+                        <select class="form-select"
+                                @bind="sensor.Category">
+
+                            <option value="">
+                                -- Select sensor category --
+                            </option>
+
+                            <option value="Temperature">
+                                Temperature
+                            </option>
+
+                            <option value="Humidity">
+                                Humidity
+                            </option>
+
+                            <option value="Pressure">
+                                Pressure
+                            </option>
+
+                            <option value="Air Quality">
+                                Air Quality
+                            </option>
+
+                            <option value="Motion">
+                                Motion
+                            </option>
+
+                        </select>
+
+                        @if (showValidation &&
+                             string.IsNullOrWhiteSpace(sensor.Category))
+                        {
+                            <div class="text-danger mt-1">
+                                Sensor category is required.
+                            </div>
+                        }
+
+                    </div>
+
+                    <button class="btn btn-success"
+                            disabled="@isSubmitting"
+                            @onclick="RegisterSensorAsync">
+
+                        @if (isSubmitting)
+                        {
+                            <span>Registering...</span>
+                        }
+                        else
+                        {
+                            <span>Register Sensor</span>
+                        }
+
+                    </button>
+
+                    <a href="/sensors"
+                       class="btn btn-outline-secondary ms-2">
+                        Cancel
+                    </a>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+
+    private SensorRecord sensor = new();
+
+    private string errorMessage = string.Empty;
+
+    private bool showValidation = false;
+
+    private bool isSubmitting = false;
+
+
+    private async Task RegisterSensorAsync()
+    {
+        showValidation = true;
+        errorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(sensor.MacAddress) ||
+            string.IsNullOrWhiteSpace(sensor.Location) ||
+            string.IsNullOrWhiteSpace(sensor.Category))
+        {
+            return;
+        }
+
+        try
+        {
+            isSubmitting = true;
+
+            HttpResponseMessage response =
+                await Http.PostAsJsonAsync(
+                    "api/sensors",
+                    sensor);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/sensors");
+                return;
+            }
+
+            if (response.StatusCode ==
+                System.Net.HttpStatusCode.Conflict)
+            {
+                errorMessage =
+                    "A sensor with this MAC address is already registered.";
+
+                return;
+            }
+
+            errorMessage =
+                "The sensor could not be registered. Please check the information and try again.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Unable to communicate with the Smart-X API: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}
