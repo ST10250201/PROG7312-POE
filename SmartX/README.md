@@ -316,4 +316,4 @@ The backend API must be running while using functionality in the Smart-X client 
 
 ## Author
 
-Developed for the PROG7312 Portfolio of Evidence.
+Developed for the PROG7312 Portfolio of Evidence (Part 1). 
