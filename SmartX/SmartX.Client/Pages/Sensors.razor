@@ -20,6 +20,7 @@ else if (!string.IsNullOrWhiteSpace(errorMessage))
 }
 else
 {
+    <!-- Dashboard Summary Cards -->
     <div class="row mb-4">
         <div class="col">
             <div class="card p-3">
@@ -56,12 +57,30 @@ else
             </div>
         </div>
     </div>
+
+    <!-- Registered Sensors -->
     <h3>Registered Sensors</h3>
+
+    <!-- Search and Filter -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input class="form-control"
+                   @bind="searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Search by MAC address, location, category or status" />
+        </div>
+    </div>
 
     @if (sensors.Count == 0)
     {
         <div class="alert alert-info">
             No sensors are currently registered.
+        </div>
+    }
+    else if (!FilteredSensors.Any())
+    {
+        <div class="alert alert-warning">
+            No sensors match your search.
         </div>
     }
     else
@@ -80,7 +99,7 @@ else
                 </thead>
 
                 <tbody>
-                    @foreach (var sensor in sensors)
+                    @foreach (var sensor in FilteredSensors)
                     {
                         <tr>
                             <td>@sensor.Id</td>
@@ -104,6 +123,7 @@ else
 
     <hr />
 
+    <!-- Encrypted Attachments -->
     <h3>Encrypted Sensor Attachments</h3>
 
     @if (attachments.Count == 0)
@@ -137,7 +157,9 @@ else
                             <td>@attachment.ContentType</td>
                             <td>@FormatFileSize(attachment.FileSize)</td>
                             <td>
-                                @attachment.UploadedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                @attachment.UploadedAt
+                                .ToLocalTime()
+                                .ToString("yyyy-MM-dd HH:mm:ss")
                             </td>
                         </tr>
                     }
@@ -153,22 +175,46 @@ else
 
     private bool isLoading = true;
     private string errorMessage = string.Empty;
+    private string searchTerm = string.Empty;
+
+    private IEnumerable<SensorRecord> FilteredSensors =>
+        string.IsNullOrWhiteSpace(searchTerm)
+            ? sensors
+            : sensors.Where(s =>
+                s.MacAddress.Contains(
+                    searchTerm,
+                    StringComparison.OrdinalIgnoreCase) ||
+
+                s.Location.Contains(
+                    searchTerm,
+                    StringComparison.OrdinalIgnoreCase) ||
+
+                s.Category.Contains(
+                    searchTerm,
+                    StringComparison.OrdinalIgnoreCase) ||
+
+                s.Status.Contains(
+                    searchTerm,
+                    StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             sensors =
-                await Http.GetFromJsonAsync<List<SensorRecord>>("api/sensors")
+                await Http.GetFromJsonAsync<List<SensorRecord>>(
+                    "api/sensors")
                 ?? new List<SensorRecord>();
 
             attachments =
-                await Http.GetFromJsonAsync<List<SensorAttachment>>("api/attachments")
+                await Http.GetFromJsonAsync<List<SensorAttachment>>(
+                    "api/attachments")
                 ?? new List<SensorAttachment>();
         }
         catch (Exception ex)
         {
-            errorMessage = $"Unable to load Smart-X data: {ex.Message}";
+            errorMessage =
+                $"Unable to load Smart-X data: {ex.Message}";
         }
         finally
         {
