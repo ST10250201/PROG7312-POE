@@ -20,7 +20,7 @@ else if (!string.IsNullOrWhiteSpace(errorMessage))
 }
 else
 {
-    <!-- Dashboard Summary Cards -->
+    <!-- Summary Cards -->
     <div class="row mb-4">
         <div class="col">
             <div class="card p-3">
@@ -58,17 +58,47 @@ else
         </div>
     </div>
 
-    <!-- Registered Sensors -->
     <h3>Registered Sensors</h3>
 
-    <!-- Search and Filter -->
+    <!-- Search and Filtering -->
     <div class="row mb-3">
+
         <div class="col-md-6">
             <input class="form-control"
                    @bind="searchTerm"
                    @bind:event="oninput"
-                   placeholder="Search by MAC address, location, category or status" />
+                   placeholder="Search MAC address, location, category or status" />
         </div>
+
+        <div class="col-md-3">
+            <select class="form-select"
+                    @bind="selectedCategory">
+
+                <option value="">All Categories</option>
+
+                @foreach (var category in SensorCategories)
+                {
+                    <option value="@category">
+                        @category
+                    </option>
+                }
+
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <select class="form-select"
+                    @bind="selectedStatus">
+
+                <option value="">All Statuses</option>
+                <option value="Normal">Normal</option>
+                <option value="Warning">Warning</option>
+                <option value="Critical">Critical</option>
+                <option value="Offline">Offline</option>
+
+            </select>
+        </div>
+
     </div>
 
     @if (sensors.Count == 0)
@@ -80,13 +110,14 @@ else
     else if (!FilteredSensors.Any())
     {
         <div class="alert alert-warning">
-            No sensors match your search.
+            No sensors match the selected filters.
         </div>
     }
     else
     {
         <div class="table-responsive">
             <table class="table table-hover align-middle">
+
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -99,31 +130,42 @@ else
                 </thead>
 
                 <tbody>
+
                     @foreach (var sensor in FilteredSensors)
                     {
                         <tr>
+
                             <td>@sensor.Id</td>
+
                             <td>@sensor.MacAddress</td>
+
                             <td>@sensor.Location</td>
+
                             <td>@sensor.Category</td>
+
                             <td>
                                 <span class="@GetStatusClass(sensor.Status)">
                                     @sensor.Status
                                 </span>
                             </td>
+
                             <td>
-                                @sensor.LastSeen.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                @sensor.LastSeen
+                                .ToLocalTime()
+                                .ToString("yyyy-MM-dd HH:mm:ss")
                             </td>
+
                         </tr>
                     }
+
                 </tbody>
+
             </table>
         </div>
     }
 
     <hr />
 
-    <!-- Encrypted Attachments -->
     <h3>Encrypted Sensor Attachments</h3>
 
     @if (attachments.Count == 0)
@@ -135,7 +177,9 @@ else
     else
     {
         <div class="table-responsive">
+
             <table class="table table-bordered align-middle">
+
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -148,54 +192,106 @@ else
                 </thead>
 
                 <tbody>
+
                     @foreach (var attachment in attachments)
                     {
                         <tr>
+
                             <td>@attachment.Id</td>
+
                             <td>@attachment.SensorMacAddress</td>
+
                             <td>@attachment.OriginalFileName</td>
+
                             <td>@attachment.ContentType</td>
+
                             <td>@FormatFileSize(attachment.FileSize)</td>
+
                             <td>
                                 @attachment.UploadedAt
                                 .ToLocalTime()
                                 .ToString("yyyy-MM-dd HH:mm:ss")
                             </td>
+
                         </tr>
                     }
+
                 </tbody>
+
             </table>
+
         </div>
     }
 }
 
 @code {
+
     private List<SensorRecord> sensors = new();
+
     private List<SensorAttachment> attachments = new();
 
     private bool isLoading = true;
+
     private string errorMessage = string.Empty;
+
     private string searchTerm = string.Empty;
 
+    private string selectedCategory = string.Empty;
+
+    private string selectedStatus = string.Empty;
+
+
+    private IEnumerable<string> SensorCategories =>
+        sensors
+            .Select(s => s.Category)
+            .Distinct()
+            .OrderBy(c => c);
+
+
     private IEnumerable<SensorRecord> FilteredSensors =>
-        string.IsNullOrWhiteSpace(searchTerm)
-            ? sensors
-            : sensors.Where(s =>
-                s.MacAddress.Contains(
+        sensors.Where(sensor =>
+        {
+            bool matchesSearch =
+                string.IsNullOrWhiteSpace(searchTerm) ||
+
+                sensor.MacAddress.Contains(
                     searchTerm,
                     StringComparison.OrdinalIgnoreCase) ||
 
-                s.Location.Contains(
+                sensor.Location.Contains(
                     searchTerm,
                     StringComparison.OrdinalIgnoreCase) ||
 
-                s.Category.Contains(
+                sensor.Category.Contains(
                     searchTerm,
                     StringComparison.OrdinalIgnoreCase) ||
 
-                s.Status.Contains(
+                sensor.Status.Contains(
                     searchTerm,
-                    StringComparison.OrdinalIgnoreCase));
+                    StringComparison.OrdinalIgnoreCase);
+
+
+            bool matchesCategory =
+                string.IsNullOrWhiteSpace(selectedCategory) ||
+
+                sensor.Category.Equals(
+                    selectedCategory,
+                    StringComparison.OrdinalIgnoreCase);
+
+
+            bool matchesStatus =
+                string.IsNullOrWhiteSpace(selectedStatus) ||
+
+                sensor.Status.Equals(
+                    selectedStatus,
+                    StringComparison.OrdinalIgnoreCase);
+
+
+            return matchesSearch &&
+                   matchesCategory &&
+                   matchesStatus;
+        });
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -222,17 +318,28 @@ else
         }
     }
 
+
     private string GetStatusClass(string status)
     {
         return status switch
         {
-            "Normal" => "badge bg-success",
-            "Warning" => "badge bg-warning text-dark",
-            "Critical" => "badge bg-danger",
-            "Offline" => "badge bg-secondary",
-            _ => "badge bg-light text-dark"
+            "Normal" =>
+                "badge bg-success",
+
+            "Warning" =>
+                "badge bg-warning text-dark",
+
+            "Critical" =>
+                "badge bg-danger",
+
+            "Offline" =>
+                "badge bg-secondary",
+
+            _ =>
+                "badge bg-light text-dark"
         };
     }
+
 
     private string FormatFileSize(long bytes)
     {
