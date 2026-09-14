@@ -3,11 +3,17 @@ using SmartX.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// -------------------------------------------------------
+// SERVICES
+// -------------------------------------------------------
+
 builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton<FileUploadService>();
 
 builder.Services.AddSingleton<SensorRegistry>();
+
+builder.Services.AddSingleton<DeploymentZoneService>();
 
 builder.Services.AddCors(options =>
 {
@@ -32,7 +38,7 @@ app.UseHttpsRedirection();
 app.UseCors("AllowSmartXWeb");
 
 // -------------------------------------------------------
-// Smart-X in-memory stores
+// SMART-X IN-MEMORY DATA
 // -------------------------------------------------------
 
 var telemetryHistory = new List<TelemetryInput>();
@@ -42,7 +48,7 @@ var telemetryPackets = new List<TelemetryPacket<double>>();
 var attachments = new List<SensorAttachment>();
 
 // -------------------------------------------------------
-// Root
+// ROOT ENDPOINT
 // -------------------------------------------------------
 
 app.MapGet("/", () =>
@@ -275,5 +281,36 @@ app.MapGet("/api/attachments", () =>
 {
     return Results.Ok(attachments);
 });
+
+// -------------------------------------------------------
+// DEPLOYMENT ZONE ENDPOINT
+// -------------------------------------------------------
+
+app.MapGet(
+    "/api/deployment-zones",
+    (DeploymentZoneService zoneService) =>
+    {
+        string[][] deploymentZones =
+        {
+            new[] { "Greenhouse", "Hydroponics" },
+            new[] { "Utility", "Storage" },
+            new[] { "Production", "Testing" }
+        };
+
+        List<string> zoneList =
+            zoneService.ConvertJaggedArrayToList(
+                deploymentZones);
+
+        return Results.Ok(new
+        {
+            message =
+                "Jagged deployment-zone array converted to List<string>.",
+            zones = zoneList
+        });
+    });
+
+// -------------------------------------------------------
+// START API
+// -------------------------------------------------------
 
 app.Run();
