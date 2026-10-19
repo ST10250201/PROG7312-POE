@@ -24,6 +24,9 @@ builder.Services.AddSingleton<DeviceCommandService>();
 // Generates evidence-based recommendations from sensor and command activity.
 builder.Services.AddSingleton<RecommendationEngineService>();
 
+// Stores recorded sensor searches and search frequency statistics.
+builder.Services.AddSingleton<SearchHistoryService>();
+
 builder.Services.AddHostedService<TelemetryBackgroundWorker>();
 
 builder.Services.AddSingleton<DeploymentZoneService>();
@@ -677,7 +680,6 @@ app.MapGet(
         });
     });
 
-
 // -------------------------------------------------------
 // PART 2 — PREDICTIVE ACTION & RECOMMENDATION ENGINE
 // -------------------------------------------------------
@@ -699,7 +701,55 @@ app.MapGet(
         });
     });
 
+// -------------------------------------------------------
+// PART 2 — SENSOR SEARCH HISTORY
+// -------------------------------------------------------
 
+// Record a deliberate sensor search and its filter settings.
+app.MapPost(
+    "/api/search-history",
+    (
+        SearchHistoryRequest request,
+        SearchHistoryService searchHistoryService) =>
+    {
+        if (request.ResultCount < 0)
+        {
+            return Results.BadRequest(new
+            {
+                message = "Result count cannot be negative."
+            });
+        }
+
+        var entry = searchHistoryService.RecordSearch(
+            request.SearchTerm,
+            request.Category,
+            request.ActiveAlertsOnly,
+            request.ResultCount);
+
+        return Results.Created(
+            $"/api/search-history/{entry.Id}",
+            entry);
+    });
+
+// Retrieve the complete search history, newest first.
+app.MapGet(
+    "/api/search-history",
+    (SearchHistoryService searchHistoryService) =>
+    {
+        return Results.Ok(searchHistoryService.GetHistory());
+    });
+
+// Retrieve search-term frequency statistics.
+app.MapGet(
+    "/api/search-history/frequency",
+    (SearchHistoryService searchHistoryService) =>
+    {
+        return Results.Ok(new
+        {
+            totalSearches = searchHistoryService.GetTotalSearches(),
+            searchFrequency = searchHistoryService.GetSearchFrequency()
+        });
+    });
 
 // -------------------------------------------------------
 // START API
@@ -716,3 +766,9 @@ public record DeviceCommandRequest(
     string MacAddress,
     string DeviceType,
     string Action);
+
+public record SearchHistoryRequest(
+    string SearchTerm,
+    string Category,
+    bool ActiveAlertsOnly,
+    int ResultCount);

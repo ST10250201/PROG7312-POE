@@ -259,13 +259,42 @@
 
             </div>
 
-            <!-- RESET FILTERS -->
-            <div class="d-flex justify-content-end mb-3">
+            <!-- SEARCH HISTORY ACTIONS -->
+            <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
+
+                <button class="btn btn-primary"
+                        disabled="@(isRecordingSearch || isLoading || !HasActiveSearchFilters)"
+                        @onclick="RecordSensorSearchAsync">
+                    @(isRecordingSearch ? "Recording..." : "Record Search")
+                </button>
+
                 <button class="btn btn-outline-secondary"
+                        disabled="@isRecordingSearch"
                         @onclick="ResetSensorFilters">
                     Reset Filters
                 </button>
+
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(searchHistoryMessage))
+            {
+                <div class="alert alert-success" role="status">
+                    @searchHistoryMessage
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(searchHistoryError))
+            {
+                <div class="alert alert-danger" role="alert">
+                    @searchHistoryError
+                </div>
+            }
+
+            <p class="text-muted small">
+                Filtering happens instantly. Click
+                <strong>Record Search</strong> to save your completed
+                search and its results for historical analysis.
+            </p>
 
             <!-- FILTERED SENSOR RESULTS -->
             <div class="table-responsive">
@@ -380,7 +409,9 @@
                 string.IsNullOrWhiteSpace(recommendationError))
             {
                 <div class="alert alert-success mb-0">
-                    <strong>No recommendations currently require attention.</strong>
+                    <strong>
+                        No recommendations currently require attention.
+                    </strong>
 
                     <p class="mb-0 mt-2">
                         Recommendations will appear when the engine
@@ -843,9 +874,16 @@
     private bool isCommandBusy;
     private bool isRefreshingInsights;
 
+    // NEW: Search history submission state.
+    private bool isRecordingSearch;
+
     private string errorMessage = string.Empty;
     private string commandMessage = string.Empty;
     private string recommendationError = string.Empty;
+
+    // NEW: Search history feedback.
+    private string searchHistoryMessage = string.Empty;
+    private string searchHistoryError = string.Empty;
 
     private string selectedSensorMac = string.Empty;
 
@@ -855,6 +893,12 @@
     private string sensorSearchText = string.Empty;
     private string selectedSensorCategory = "All";
     private bool showActiveAlertsOnly = false;
+
+    // Only allow meaningful searches to be recorded.
+    private bool HasActiveSearchFilters =>
+        !string.IsNullOrWhiteSpace(sensorSearchText)
+        || selectedSensorCategory != "All"
+        || showActiveAlertsOnly;
 
     // AVAILABLE SENSOR CATEGORIES
     private IEnumerable<string> AvailableSensorCategories =>
@@ -895,6 +939,74 @@
         sensorSearchText = string.Empty;
         selectedSensorCategory = "All";
         showActiveAlertsOnly = false;
+
+        searchHistoryMessage = string.Empty;
+        searchHistoryError = string.Empty;
+    }
+
+    // NEW: RECORD A DELIBERATE SENSOR SEARCH
+    private async Task RecordSensorSearchAsync()
+    {
+        if (isRecordingSearch || isLoading)
+        {
+            return;
+        }
+
+        searchHistoryMessage = string.Empty;
+        searchHistoryError = string.Empty;
+
+        if (!HasActiveSearchFilters)
+        {
+            searchHistoryError =
+                "Enter a search term or select a filter before recording.";
+            return;
+        }
+
+        isRecordingSearch = true;
+
+        try
+        {
+            string searchTerm = sensorSearchText.Trim();
+            string category = selectedSensorCategory;
+            bool activeAlertsOnly = showActiveAlertsOnly;
+            int resultCount = FilteredSensors.Count;
+
+            var request = new
+            {
+                SearchTerm = searchTerm,
+                Category = category,
+                ActiveAlertsOnly = activeAlertsOnly,
+                ResultCount = resultCount
+            };
+
+            using var response = await Http.PostAsJsonAsync(
+                $"{ApiBaseUrl}/api/search-history",
+                request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                searchHistoryMessage =
+                    $"Search recorded successfully. " +
+                    $"{resultCount} sensor(s) matched the selected criteria.";
+
+                return;
+            }
+
+            searchHistoryError =
+                "Unable to record the search. " +
+                $"API returned HTTP {(int)response.StatusCode}.";
+        }
+        catch (Exception ex)
+        {
+            searchHistoryError =
+                "Unable to record the search. " +
+                "Check that SmartX.Api is running. " +
+                ex.Message;
+        }
+        finally
+        {
+            isRecordingSearch = false;
+        }
     }
 
     private ProcessingStatusDto processingStatus = new();
