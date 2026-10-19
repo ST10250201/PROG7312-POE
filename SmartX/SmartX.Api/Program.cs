@@ -133,7 +133,6 @@ app.MapPost(
         }
         catch (InvalidOperationException)
         {
-            // Handles concurrent duplicate registrations.
             return Results.Conflict(new
             {
                 message =
@@ -154,7 +153,8 @@ app.MapPost(
     "/api/telemetry",
     (
         TelemetryInput telemetry,
-        SensorRegistry registry) =>
+        SensorRegistry registry,
+        TelemetryProcessingService processor) =>
     {
         SensorRecord? sensor =
             registry.FindByMacAddress(
@@ -194,12 +194,20 @@ app.MapPost(
 
         telemetryPackets.Add(packet);
 
-        // Update the sensor through the thread-safe registry method.
-        registry.UpdateTelemetry(
+        // Preserve Part 1's immediate sensor update.
+        bool updated = registry.UpdateTelemetry(
             telemetry.MacAddress,
             telemetry.Value,
             telemetry.Unit,
             receivedAt);
+
+        // Synchronise active alerts with accepted telemetry.
+        if (updated)
+        {
+            processor.UpdateAlertState(
+                telemetry.MacAddress,
+                telemetry.Value);
+        }
 
         return Results.Ok(new
         {
@@ -421,7 +429,7 @@ app.MapGet(
         });
     });
 
-// Process one job and update its sensor.
+// Process one job and update its sensor and alert state.
 app.MapPost(
     "/api/processing/next",
     (
@@ -444,6 +452,13 @@ app.MapPost(
             job.Value,
             job.Unit,
             job.Timestamp);
+
+        if (updated)
+        {
+            processor.UpdateAlertState(
+                job.MacAddress,
+                job.Value);
+        }
 
         return Results.Ok(new
         {

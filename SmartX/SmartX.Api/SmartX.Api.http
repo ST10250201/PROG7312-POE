@@ -99,3 +99,56 @@ GET https://localhost:7199/api/processing/history
 
   ### Verify sensor status after processing
 GET https://localhost:7199/api/sensors
+
+
+
+
+
+
+
+### Test 1: Activate critical alert
+POST https://localhost:7199/api/telemetry
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 95,
+  "unit": "C"
+}
+
+### Test 1: Check active alerts
+GET https://localhost:7199/api/processing/alerts
+
+
+
+###  — Test 2: Repeat critical reading
+POST https://localhost:7199/api/telemetry
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 95,
+  "unit": "C"
+}
+
+### Test 2: Verify no duplicate alerts
+GET https://localhost:7199/api/processing/alerts
+
+### Test 3: Return sensor to normal
+POST https://localhost:7199/api/telemetry
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 30,
+  "unit": "C"
+}
+
+### Test 3: Verify alert recovery
+GET https://localhost:7199/api/processing/alerts
+
+### Verify final sensor status
+GET https://localhost:7199/api/sensors

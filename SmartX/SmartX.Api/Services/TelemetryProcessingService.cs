@@ -9,18 +9,19 @@ namespace SmartX.Api.Services
     {
         private readonly object _lock = new();
 
-        // FIFO queue for standard telemetry.
+        // Standard telemetry is processed in FIFO order.
         private readonly Queue<TelemetryJob> _normalQueue = new();
 
-        // Lower priority numbers are processed first.
-        private readonly PriorityQueue<TelemetryJob, int>
+        // Critical telemetry bypasses the standard queue.
+        // Sequence ensures FIFO order among critical jobs.
+        private readonly PriorityQueue<TelemetryJob, (int, long)>
             _criticalQueue = new();
 
-        // Timestamp-ordered history.
+        // Timestamp-ordered processing history.
         private readonly SortedDictionary<DateTime, TelemetryJob>
             _history = new();
 
-        // Unique active critical alerts.
+        // Prevent duplicate critical alerts per sensor.
         private readonly HashSet<string> _activeAlerts =
             new(StringComparer.OrdinalIgnoreCase);
 
@@ -64,32 +65,34 @@ namespace SmartX.Api.Services
                     "MAC address is required.");
             }
 
+            if (double.IsNaN(value) ||
+                double.IsInfinity(value))
+            {
+                throw new ArgumentException(
+                    "Telemetry value must be finite.");
+            }
+
             lock (_lock)
             {
                 var job = new TelemetryJob
                 {
                     Sequence = ++_sequence,
                     MacAddress = macAddress.Trim(),
-                    DataType = dataType,
+                    DataType = dataType ?? string.Empty,
                     Value = value,
-                    Unit = unit,
-                    Timestamp = DateTime.UtcNow
+                    Unit = unit ?? string.Empty,
+                    Timestamp = DateTime.UtcNow,
+                    Priority = value >= 80 ? 0 : 1
                 };
 
-                if (value >= 80)
+                if (job.Priority == 0)
                 {
-                    job.Priority = 0;
-
                     _criticalQueue.Enqueue(
                         job,
-                        job.Priority);
-
-                    _activeAlerts.Add(job.MacAddress);
+                        (job.Priority, job.Sequence));
                 }
                 else
                 {
-                    job.Priority = 1;
-
                     _normalQueue.Enqueue(job);
                 }
             }
@@ -118,9 +121,9 @@ namespace SmartX.Api.Services
                     return null;
                 }
 
-                // Prevent duplicate timestamp keys.
                 DateTime key = job.Timestamp;
 
+                // SortedDictionary requires unique timestamp keys.
                 while (_history.ContainsKey(key))
                 {
                     key = key.AddTicks(1);
@@ -129,6 +132,36 @@ namespace SmartX.Api.Services
                 _history.Add(key, job);
 
                 return job;
+            }
+        }
+
+        // -------------------------------------------------------
+        // UPDATE CRITICAL ALERT STATE
+        // -------------------------------------------------------
+
+        public void UpdateAlertState(
+            string macAddress,
+            double value)
+        {
+            if (string.IsNullOrWhiteSpace(macAddress))
+            {
+                return;
+            }
+
+            lock (_lock)
+            {
+                string key = macAddress.Trim();
+
+                if (value >= 80)
+                {
+                    _activeAlerts.Add(key);
+                }
+                else
+                {
+                    // Recovery: remove an alert when the latest
+                    // accepted reading is below the critical threshold.
+                    _activeAlerts.Remove(key);
+                }
             }
         }
 
@@ -156,7 +189,7 @@ namespace SmartX.Api.Services
         }
 
         // -------------------------------------------------------
-        // PART 2 — PROCESS JOBS AND UPDATE SENSOR REGISTRY
+        // PROCESS QUEUED JOBS AND UPDATE SENSOR REGISTRY
         // -------------------------------------------------------
 
         public IReadOnlyList<TelemetryJob>
@@ -176,13 +209,20 @@ namespace SmartX.Api.Services
                     break;
                 }
 
-                // Update the sensor using its original timestamp.
-                // Older readings cannot overwrite newer readings.
-                registry.UpdateTelemetry(
+                bool updated = registry.UpdateTelemetry(
                     job.MacAddress,
                     job.Value,
                     job.Unit,
                     job.Timestamp);
+
+                // Do not let an older queued reading
+                // change the current alert state.
+                if (updated)
+                {
+                    UpdateAlertState(
+                        job.MacAddress,
+                        job.Value);
+                }
 
                 processed.Add(job);
             }
