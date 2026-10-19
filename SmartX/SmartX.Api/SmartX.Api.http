@@ -304,3 +304,62 @@ POST https://localhost:7199/api/processing/mode/automatic
 
 ### Confirm Automatic mode
 GET https://localhost:7199/api/processing/mode
+
+
+
+  
+### STEP 10.5 — Register test sensor
+POST https://localhost:7199/api/sensors
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "location": "Hydroponics Zone B",
+  "category": "Temperature"
+}
+
+### STEP 10.5 — Turn Pump ON
+POST https://localhost:7199/api/commands
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "deviceType": "Pump",
+  "action": "ON"
+}
+
+### STEP 10.5 — Check device states
+GET https://localhost:7199/api/commands/states
+
+
+
+
+### STEP 10.6 — Turn Relay ON
+POST https://localhost:7199/api/commands
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "deviceType": "Relay",
+  "action": "ON"
+}
+
+### STEP 10.6 — Check command stack
+GET https://localhost:7199/api/commands/status
+
+### STEP 10.6 — Check device states
+GET https://localhost:7199/api/commands/states
+
+
+
+### STEP 10.7 — Undo the most recent command
+POST https://localhost:7199/api/commands/undo
+
+### STEP 10.7 — Verify device states after undo
+GET https://localhost:7199/api/commands/states
+
+### STEP 10.7 — Verify undo stack
+GET https://localhost:7199/api/commands/status
+
+### STEP 10.7 — View command history
+GET https://localhost:7199/api/commands/history

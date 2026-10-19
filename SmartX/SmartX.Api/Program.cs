@@ -14,15 +14,14 @@ builder.Services.AddSingleton<FileUploadService>();
 
 builder.Services.AddSingleton<SensorRegistry>();
 
-
 builder.Services.AddSingleton<TelemetryProcessingService>();
 
-// Controls Automatic and Manual processing modes.
 builder.Services.AddSingleton<ProcessingModeService>();
 
-// Background worker uses the shared processing mode.
-builder.Services.AddHostedService<TelemetryBackgroundWorker>();
+// Stores device states, command history and the LIFO undo stack.
+builder.Services.AddSingleton<DeviceCommandService>();
 
+builder.Services.AddHostedService<TelemetryBackgroundWorker>();
 
 builder.Services.AddSingleton<DeploymentZoneService>();
 
@@ -520,7 +519,6 @@ app.MapDelete(
             : Results.NotFound(new { message = "Alert not found." });
     });
 
-
 // -------------------------------------------------------
 // PART 2 — PROCESSING MODE CONTROLS
 // -------------------------------------------------------
@@ -566,9 +564,128 @@ app.MapPost(
         });
     });
 
+// -------------------------------------------------------
+// PART 2 — DEVICE COMMANDS AND UNDO HISTORY
+// -------------------------------------------------------
+
+// Execute a manual Pump/Relay command.
+app.MapPost(
+    "/api/commands",
+    (
+        DeviceCommandRequest request,
+        DeviceCommandService commandService,
+        SensorRegistry registry) =>
+    {
+        if (string.IsNullOrWhiteSpace(request.MacAddress))
+        {
+            return Results.BadRequest(new
+            {
+                error = "MAC address is required."
+            });
+        }
+
+        if (registry.FindByMacAddress(request.MacAddress) == null)
+        {
+            return Results.NotFound(new
+            {
+                error = "Sensor/device MAC address not registered."
+            });
+        }
+
+        try
+        {
+            var command = commandService.ExecuteCommand(
+                request.MacAddress,
+                request.DeviceType,
+                request.Action);
+
+            return Results.Ok(new
+            {
+                message = "Device command executed successfully.",
+                command,
+                undoAvailable = commandService.UndoCount > 0
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new
+            {
+                error = ex.Message
+            });
+        }
+    });
+
+// Undo the most recent manual command (LIFO).
+app.MapPost(
+    "/api/commands/undo",
+    (DeviceCommandService commandService) =>
+    {
+        var undone = commandService.UndoLastCommand();
+
+        if (undone == null)
+        {
+            return Results.Conflict(new
+            {
+                error = "No commands available to undo."
+            });
+        }
+
+        return Results.Ok(new
+        {
+            message = "Most recent command undone.",
+            command = undone,
+            remainingUndoCount = commandService.UndoCount
+        });
+    });
+
+// Get timestamped command history.
+app.MapGet(
+    "/api/commands/history",
+    (DeviceCommandService commandService) =>
+    {
+        return Results.Ok(commandService.GetHistory());
+    });
+
+// Get current Pump/Relay states.
+app.MapGet(
+    "/api/commands/states",
+    (DeviceCommandService commandService) =>
+    {
+        return Results.Ok(commandService.GetDeviceStates());
+    });
+
+// Get command stack status.
+app.MapGet(
+    "/api/commands/status",
+    (DeviceCommandService commandService) =>
+    {
+        return Results.Ok(new
+        {
+            undoCount = commandService.UndoCount,
+            undoAvailable = commandService.UndoCount > 0,
+            historyCount = commandService.GetHistory().Count
+        });
+    });
 
 // -------------------------------------------------------
 // START API
 // -------------------------------------------------------
 
 app.Run();
+
+// -------------------------------------------------------
+// REQUEST MODELS
+// -------------------------------------------------------
+
+// Record declarations must appear after top-level statements.
+public record DeviceCommandRequest(
+    string MacAddress,
+    string DeviceType,
+    string Action);
