@@ -1,55 +1,355 @@
 ﻿@page "/command-stream"
+@using System.Net.Http.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Http
 
 <PageTitle>Command Stream | Smart-X</PageTitle>
 
 <div class="container-fluid">
-    <div class="mb-4">
-        <h1 class="fw-bold">Real-Time Command Stream</h1>
-        <p class="text-muted">
-            Monitor sensor telemetry, manage connected devices,
-            and review manual command history.
-        </p>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h1 class="fw-bold">Real-Time Command Stream</h1>
+            <p class="text-muted mb-0">
+                Monitor live sensor telemetry, processing queues
+                and critical alerts.
+            </p>
+        </div>
+
+        <button class="btn btn-primary"
+                disabled="@isLoading"
+                @onclick="LoadDashboardAsync">
+            @(isLoading ? "Refreshing..." : "Refresh Dashboard")
+        </button>
     </div>
 
-    <div class="alert alert-info" role="status">
-        <strong>Part 2 Development:</strong>
-        Real-time telemetry processing, priority alerts,
-        device commands, undo history and predictive
-        recommendations will be implemented here.
-    </div>
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            @errorMessage
+        </div>
+    }
 
-    <div class="row g-3">
-        <div class="col-md-4">
+    @if (isLoading && !hasLoaded)
+    {
+        <div class="alert alert-info">
+            Loading Smart-X telemetry dashboard...
+        </div>
+    }
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-sm-6 col-xl-3">
             <div class="card shadow-sm h-100">
                 <div class="card-body">
-                    <h5>Telemetry Queue</h5>
-                    <p class="text-muted mb-0">
-                        Incoming sensor readings and processing status.
-                    </p>
+                    <p class="text-muted mb-2">Registered Sensors</p>
+                    <h2 class="fw-bold">@sensors.Count</h2>
+                    <small class="text-muted">
+                        Connected sensor registry
+                    </small>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-4">
+        <div class="col-sm-6 col-xl-3">
             <div class="card shadow-sm h-100">
                 <div class="card-body">
-                    <h5>Critical Alerts</h5>
-                    <p class="text-muted mb-0">
-                        High-priority sensor events and warnings.
-                    </p>
+                    <p class="text-muted mb-2">Normal Queue</p>
+                    <h2 class="fw-bold">
+                        @processingStatus.NormalQueueCount
+                    </h2>
+                    <small class="text-muted">
+                        Pending FIFO telemetry jobs
+                    </small>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-4">
+        <div class="col-sm-6 col-xl-3">
             <div class="card shadow-sm h-100">
                 <div class="card-body">
-                    <h5>Command History</h5>
-                    <p class="text-muted mb-0">
-                        Manual overrides and undo operations.
-                    </p>
+                    <p class="text-muted mb-2">Critical Queue</p>
+                    <h2 class="fw-bold text-danger">
+                        @processingStatus.CriticalQueueCount
+                    </h2>
+                    <small class="text-muted">
+                        Pending high-priority jobs
+                    </small>
                 </div>
             </div>
         </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-2">Active Alerts</p>
+                    <h2 class="fw-bold text-warning">
+                        @processingStatus.ActiveAlerts.Count
+                    </h2>
+                    <small class="text-muted">
+                        Unique critical sensor alerts
+                    </small>
+                </div>
+            </div>
+        </div>
+
     </div>
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-lg-5">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+
+                    <h5 class="fw-semibold mb-3">
+                        Processing Status
+                    </h5>
+
+                    <p>
+                        <strong>Current mode:</strong>
+                        <span class="badge bg-primary ms-2">
+                            @processingMode.Mode
+                        </span>
+                    </p>
+
+                    <p class="mb-0 text-muted">
+                        @if (processingMode.AutomaticProcessingEnabled)
+                        {
+                            <span>
+                                Incoming telemetry is automatically
+                                processed by the background worker.
+                            </span>
+                        }
+                        else
+                        {
+                            <span>
+                                Manual processing is enabled.
+                                Queued jobs will wait for processing.
+                            </span>
+                        }
+                    </p>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+
+                    <h5 class="fw-semibold mb-3">
+                        Active Critical Alerts
+                    </h5>
+
+                    @if (processingStatus.ActiveAlerts.Count == 0)
+                    {
+                        <div class="alert alert-success mb-0">
+                            No active critical alerts.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-danger mb-0">
+                            <strong>
+                                @processingStatus.ActiveAlerts.Count
+                                active critical alert(s)
+                            </strong>
+
+                            <ul class="mb-0 mt-2">
+                                @foreach (var mac in processingStatus.ActiveAlerts)
+                                {
+                                    <li>@mac</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-semibold mb-0">
+                    Recent Processed Telemetry
+                </h5>
+
+                <span class="badge bg-secondary">
+                    @telemetryHistory.Count records
+                </span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>MAC Address</th>
+                            <th>Data Type</th>
+                            <th>Value</th>
+                            <th>Priority</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @if (telemetryHistory.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5"
+                                    class="text-center text-muted py-4">
+                                    No processed telemetry available.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var job in telemetryHistory
+                                .OrderByDescending(x => x.Timestamp)
+                                .ThenByDescending(x => x.Sequence)
+                                .Take(15))
+                            {
+                                <tr>
+                                    <td>
+                                        @job.Timestamp.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss")
+                                    </td>
+
+                                    <td>
+                                        <code>@job.MacAddress</code>
+                                    </td>
+
+                                    <td>@job.DataType</td>
+
+                                    <td>
+                                        @job.Value @job.Unit
+                                    </td>
+
+                                    <td>
+                                        @if (job.Priority == 0)
+                                        {
+                                            <span class="badge bg-danger">
+                                                Critical
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">
+                                                Normal
+                                            </span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+
+                </table>
+            </div>
+
+        </div>
+    </div>
+
 </div>
+
+@code {
+
+    private const string ApiBaseUrl = "https://localhost:7199";
+
+    private bool isLoading;
+    private bool hasLoaded;
+    private string errorMessage = string.Empty;
+
+    private List<SensorDto> sensors = new();
+    private ProcessingStatusDto processingStatus = new();
+    private ProcessingModeDto processingMode = new();
+    private List<TelemetryJobDto> telemetryHistory = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        if (isLoading)
+        {
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = string.Empty;
+
+        try
+        {
+            var sensorResult =
+                await Http.GetFromJsonAsync<List<SensorDto>>(
+                    $"{ApiBaseUrl}/api/sensors");
+
+            var statusResult =
+                await Http.GetFromJsonAsync<ProcessingStatusDto>(
+                    $"{ApiBaseUrl}/api/processing/status");
+
+            var modeResult =
+                await Http.GetFromJsonAsync<ProcessingModeDto>(
+                    $"{ApiBaseUrl}/api/processing/mode");
+
+            var historyResult =
+                await Http.GetFromJsonAsync<List<TelemetryJobDto>>(
+                    $"{ApiBaseUrl}/api/processing/history");
+
+            sensors = sensorResult ?? new();
+            processingStatus = statusResult ?? new();
+            processingMode = modeResult ?? new();
+            telemetryHistory = historyResult ?? new();
+
+            hasLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                "Unable to load Smart-X dashboard. " +
+                "Check that SmartX.Api is running. " +
+                ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private sealed class SensorDto
+    {
+        public string MacAddress { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string Location { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+    }
+
+    private sealed class ProcessingStatusDto
+    {
+        public int NormalQueueCount { get; set; }
+        public int CriticalQueueCount { get; set; }
+        public List<string> ActiveAlerts { get; set; } = new();
+    }
+
+    private sealed class ProcessingModeDto
+    {
+        public string Mode { get; set; } = "Automatic";
+        public bool AutomaticProcessingEnabled { get; set; } = true;
+    }
+
+    private sealed class TelemetryJobDto
+    {
+        public long Sequence { get; set; }
+        public string MacAddress { get; set; } = string.Empty;
+        public string DataType { get; set; } = string.Empty;
+        public double Value { get; set; }
+        public string Unit { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+        public int Priority { get; set; }
+    }
+}

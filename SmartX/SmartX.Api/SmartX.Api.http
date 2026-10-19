@@ -363,3 +363,16 @@ GET https://localhost:7199/api/commands/status
 
 ### STEP 10.7 — View command history
 GET https://localhost:7199/api/commands/history
+
+
+
+### STEP 11.4 — Send critical telemetry
+POST https://localhost:7199/api/telemetry
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 95,
+  "unit": "C"
+}
