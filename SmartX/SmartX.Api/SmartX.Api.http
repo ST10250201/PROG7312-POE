@@ -236,3 +236,71 @@ GET https://localhost:7199/api/processing/alerts
 ### Check final processing history
 GET https://localhost:7199/api/processing/history
 
+
+
+
+
+
+### STEP 9.4 — Register test sensor
+POST https://localhost:7199/api/sensors
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "location": "Hydroponics Zone B",
+  "category": "Temperature"
+}
+
+### STEP 9.4 — Switch to Manual mode
+POST https://localhost:7199/api/processing/mode/manual
+
+### Confirm Manual mode
+GET https://localhost:7199/api/processing/mode
+
+### Queue normal reading 1
+POST https://localhost:7199/api/processing/enqueue
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 30,
+  "unit": "C"
+}
+
+### Queue normal reading 2
+POST https://localhost:7199/api/processing/enqueue
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 65,
+  "unit": "C"
+}
+
+### Queue critical reading
+POST https://localhost:7199/api/processing/enqueue
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 95,
+  "unit": "C"
+}
+
+### Check pending queues
+GET https://localhost:7199/api/processing/status
+
+### Process one job manually
+POST https://localhost:7199/api/processing/next
+
+### Process remaining jobs
+POST https://localhost:7199/api/processing/all
+
+### Return to Automatic mode
+POST https://localhost:7199/api/processing/mode/automatic
+
+### Confirm Automatic mode
+GET https://localhost:7199/api/processing/mode

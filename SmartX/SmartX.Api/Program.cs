@@ -14,10 +14,15 @@ builder.Services.AddSingleton<FileUploadService>();
 
 builder.Services.AddSingleton<SensorRegistry>();
 
+
 builder.Services.AddSingleton<TelemetryProcessingService>();
 
-// Part 2: Automatic telemetry processing.
+// Controls Automatic and Manual processing modes.
+builder.Services.AddSingleton<ProcessingModeService>();
+
+// Background worker uses the shared processing mode.
 builder.Services.AddHostedService<TelemetryBackgroundWorker>();
+
 
 builder.Services.AddSingleton<DeploymentZoneService>();
 
@@ -514,6 +519,53 @@ app.MapDelete(
             ? Results.Ok(new { message = "Alert cleared." })
             : Results.NotFound(new { message = "Alert not found." });
     });
+
+
+// -------------------------------------------------------
+// PART 2 — PROCESSING MODE CONTROLS
+// -------------------------------------------------------
+
+// Get the current processing mode.
+app.MapGet(
+    "/api/processing/mode",
+    (ProcessingModeService modeService) =>
+    {
+        return Results.Ok(new
+        {
+            mode = modeService.CurrentMode,
+            automaticProcessingEnabled =
+                modeService.AutomaticProcessingEnabled
+        });
+    });
+
+// Switch to Automatic processing.
+app.MapPost(
+    "/api/processing/mode/automatic",
+    (ProcessingModeService modeService) =>
+    {
+        modeService.SetAutomaticProcessing(true);
+
+        return Results.Ok(new
+        {
+            message = "Automatic telemetry processing enabled.",
+            mode = modeService.CurrentMode
+        });
+    });
+
+// Switch to Manual processing.
+app.MapPost(
+    "/api/processing/mode/manual",
+    (ProcessingModeService modeService) =>
+    {
+        modeService.SetAutomaticProcessing(false);
+
+        return Results.Ok(new
+        {
+            message = "Manual telemetry processing enabled.",
+            mode = modeService.CurrentMode
+        });
+    });
+
 
 // -------------------------------------------------------
 // START API
