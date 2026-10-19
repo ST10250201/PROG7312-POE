@@ -152,3 +152,87 @@ GET https://localhost:7199/api/processing/alerts
 
 ### Verify final sensor status
 GET https://localhost:7199/api/sensors
+
+
+
+
+
+  
+### STEP 8.4 — Register test sensor
+POST https://localhost:7199/api/sensors
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "location": "Hydroponics Zone B",
+  "category": "Temperature"
+}
+
+### STEP 8.4 — Enqueue critical telemetry
+POST https://localhost:7199/api/processing/enqueue
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 95,
+  "unit": "C"
+}
+
+### STEP 8.4 — Check queue status
+GET https://localhost:7199/api/processing/status
+
+### STEP 8.4 — Check processed history
+GET https://localhost:7199/api/processing/history
+
+### STEP 8.4 — Verify sensor status
+GET https://localhost:7199/api/sensors
+
+### STEP 8.4 — Verify active critical alerts
+GET https://localhost:7199/api/processing/alerts
+
+
+
+
+
+
+### STEP 8.6 — Test 1: Submit critical telemetry
+POST https://localhost:7199/api/telemetry
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 95,
+  "unit": "C"
+}
+
+### Check automatic processing history
+GET https://localhost:7199/api/processing/history
+
+### Check critical sensor status
+GET https://localhost:7199/api/sensors
+
+### Check critical alert
+GET https://localhost:7199/api/processing/alerts
+
+### STEP 8.6 — Test 2: Submit recovery telemetry
+POST https://localhost:7199/api/telemetry
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 30,
+  "unit": "C"
+}
+
+### Check final sensor status
+GET https://localhost:7199/api/sensors
+
+### Check alert recovery
+GET https://localhost:7199/api/processing/alerts
+
+### Check final processing history
+GET https://localhost:7199/api/processing/history
+

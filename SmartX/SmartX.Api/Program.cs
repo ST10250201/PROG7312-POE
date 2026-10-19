@@ -16,6 +16,9 @@ builder.Services.AddSingleton<SensorRegistry>();
 
 builder.Services.AddSingleton<TelemetryProcessingService>();
 
+// Part 2: Automatic telemetry processing.
+builder.Services.AddHostedService<TelemetryBackgroundWorker>();
+
 builder.Services.AddSingleton<DeploymentZoneService>();
 
 builder.Services.AddSingleton<RecursiveValidationService>();
@@ -146,9 +149,10 @@ app.MapPost(
     });
 
 // -------------------------------------------------------
-// TELEMETRY ENDPOINTS — PART 1
+// TELEMETRY ENDPOINTS — PART 1 + PART 2
 // -------------------------------------------------------
 
+// Receive telemetry and submit it to the automatic queue.
 app.MapPost(
     "/api/telemetry",
     (
@@ -177,10 +181,12 @@ app.MapPost(
             });
         }
 
-        telemetryHistory.Add(telemetry);
-
         DateTime receivedAt = DateTime.UtcNow;
 
+        // Preserve Part 1 telemetry history.
+        telemetryHistory.Add(telemetry);
+
+        // Preserve Part 1 generic telemetry packets.
         var packet = new TelemetryPacket<double>
         {
             MacAddress = telemetry.MacAddress,
@@ -194,20 +200,13 @@ app.MapPost(
 
         telemetryPackets.Add(packet);
 
-        // Preserve Part 1's immediate sensor update.
-        bool updated = registry.UpdateTelemetry(
+        // Part 2: Queue the reading for background processing.
+        // Critical values enter the priority queue.
+        processor.Enqueue(
             telemetry.MacAddress,
+            telemetry.DataType,
             telemetry.Value,
-            telemetry.Unit,
-            receivedAt);
-
-        // Synchronise active alerts with accepted telemetry.
-        if (updated)
-        {
-            processor.UpdateAlertState(
-                telemetry.MacAddress,
-                telemetry.Value);
-        }
+            telemetry.Unit);
 
         return Results.Ok(new
         {
@@ -375,7 +374,7 @@ app.MapGet(
 // PART 2 — REAL-TIME TELEMETRY PROCESSING
 // -------------------------------------------------------
 
-// Add telemetry to the appropriate queue.
+// Enqueue telemetry for processing.
 app.MapPost(
     "/api/processing/enqueue",
     (
@@ -416,7 +415,7 @@ app.MapPost(
             });
     });
 
-// Show pending queue counts and active alerts.
+// Show pending queues and active alerts.
 app.MapGet(
     "/api/processing/status",
     (TelemetryProcessingService processor) =>
@@ -429,7 +428,7 @@ app.MapGet(
         });
     });
 
-// Process one job and update its sensor and alert state.
+// Manually process the next queued job.
 app.MapPost(
     "/api/processing/next",
     (
@@ -468,7 +467,7 @@ app.MapPost(
         });
     });
 
-// Process all queued jobs and update registered sensors.
+// Manually process all pending jobs.
 app.MapPost(
     "/api/processing/all",
     (
@@ -486,7 +485,7 @@ app.MapPost(
         });
     });
 
-// Retrieve timestamp-ordered telemetry history.
+// Retrieve chronological telemetry history.
 app.MapGet(
     "/api/processing/history",
     (TelemetryProcessingService processor) =>
@@ -502,7 +501,7 @@ app.MapGet(
         return Results.Ok(processor.GetActiveAlerts());
     });
 
-// Clear an active critical alert.
+// Manually clear an active critical alert.
 app.MapDelete(
     "/api/processing/alerts/{macAddress}",
     (
