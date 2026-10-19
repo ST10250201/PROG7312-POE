@@ -260,11 +260,11 @@
                                         </span>
                                     </td>
 
+                                    
                                     <td>
-                                        @sensor.LastSeen
-                                        .ToLocalTime()
-                                        .ToString("yyyy-MM-dd HH:mm:ss")
+                                        @(sensor.LastSeen.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))
                                     </td>
+
 
                                 </tr>
                             }

@@ -1,44 +1,109 @@
-﻿using SmartX.Api.Models;
+﻿
+using SmartX.Api.Models;
 
 namespace SmartX.Api.Services
 {
     public class SensorRegistry
     {
-        private readonly List<SensorRecord> _sensors = new();
+        // Part 2: Hash-based device lookup using MAC addresses.
+        private readonly Dictionary<string, SensorRecord> _sensors =
+            new(StringComparer.OrdinalIgnoreCase);
 
-        public int Count => _sensors.Count;
+        // Protects the shared singleton registry from concurrent requests.
+        private readonly object _lock = new();
+
+        private int _nextId = 1;
+
+        public int Count
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _sensors.Count;
+                }
+            }
+        }
 
         public IReadOnlyList<SensorRecord> GetAll()
         {
-            return _sensors.AsReadOnly();
+            lock (_lock)
+            {
+                return _sensors.Values
+                    .OrderBy(sensor => sensor.Id)
+                    .ToList()
+                    .AsReadOnly();
+            }
         }
 
         public void Add(SensorRecord sensor)
         {
-            _sensors.Add(sensor);
+            if (sensor == null)
+            {
+                throw new ArgumentNullException(nameof(sensor));
+            }
+
+            if (string.IsNullOrWhiteSpace(sensor.MacAddress))
+            {
+                throw new ArgumentException(
+                    "A valid MAC address is required.");
+            }
+
+            lock (_lock)
+            {
+                string macAddress = sensor.MacAddress.Trim();
+
+                if (_sensors.ContainsKey(macAddress))
+                {
+                    throw new InvalidOperationException(
+                        "A sensor with this MAC address already exists.");
+                }
+
+                sensor.MacAddress = macAddress;
+
+                _sensors.Add(macAddress, sensor);
+
+                // Keep ID generation ahead of registered IDs.
+                _nextId = Math.Max(_nextId, sensor.Id + 1);
+            }
         }
 
         public SensorRecord? FindByMacAddress(string macAddress)
         {
-            return _sensors.FirstOrDefault(sensor =>
-                sensor.MacAddress.Equals(
-                    macAddress,
-                    StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(macAddress))
+            {
+                return null;
+            }
+
+            lock (_lock)
+            {
+                _sensors.TryGetValue(
+                    macAddress.Trim(),
+                    out SensorRecord? sensor);
+
+                return sensor;
+            }
         }
 
         public bool ContainsMacAddress(string macAddress)
         {
-            return _sensors.Any(sensor =>
-                sensor.MacAddress.Equals(
-                    macAddress,
-                    StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(macAddress))
+            {
+                return false;
+            }
+
+            lock (_lock)
+            {
+                return _sensors.ContainsKey(macAddress.Trim());
+            }
         }
 
         public int GenerateNextId()
         {
-            return _sensors.Count == 0
-                ? 1
-                : _sensors.Max(sensor => sensor.Id) + 1;
+            lock (_lock)
+            {
+                return _nextId++;
+            }
         }
     }
 }
