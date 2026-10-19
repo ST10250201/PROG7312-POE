@@ -1,12 +1,13 @@
 ﻿@page "/command-stream"
 @using System.Net.Http.Json
-@using System.Text.Json.Serialization
+@using SmartX.Client.Models
 @inject HttpClient Http
 
 <PageTitle>Command Stream | Smart-X</PageTitle>
 
 <div class="container-fluid">
 
+    <!-- PAGE HEADER -->
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
             <h1 class="fw-bold">Real-Time Command Stream</h1>
@@ -17,7 +18,7 @@
         </div>
 
         <button class="btn btn-primary"
-                disabled="@isLoading"
+                disabled="@(isLoading || isCommandBusy)"
                 @onclick="LoadDashboardAsync">
             @(isLoading ? "Refreshing..." : "Refresh Dashboard")
         </button>
@@ -30,6 +31,13 @@
         </div>
     }
 
+    @if (!string.IsNullOrWhiteSpace(commandMessage))
+    {
+        <div class="alert alert-success" role="status">
+            @commandMessage
+        </div>
+    }
+
     @if (isLoading && !hasLoaded)
     {
         <div class="alert alert-info">
@@ -37,6 +45,7 @@
         </div>
     }
 
+    <!-- DASHBOARD SUMMARY CARDS -->
     <div class="row g-3 mb-4">
 
         <div class="col-sm-6 col-xl-3">
@@ -95,6 +104,7 @@
 
     </div>
 
+    <!-- PROCESSING STATUS AND ACTIVE ALERTS -->
     <div class="row g-3 mb-4">
 
         <div class="col-lg-5">
@@ -170,6 +180,292 @@
 
     </div>
 
+    <!-- DEVICE CONTROL PANEL -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <h5 class="fw-semibold mb-3">
+                Device Control Panel
+            </h5>
+
+            <p class="text-muted">
+                Select a registered sensor to control its
+                simulated pump and relay devices.
+            </p>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+
+                    <label for="deviceSensor"
+                           class="form-label fw-semibold">
+                        Select Sensor
+                    </label>
+
+                    <select id="deviceSensor"
+                            class="form-select"
+                            disabled="@(isLoading || isCommandBusy)"
+                            @bind="selectedSensorMac">
+
+                        <option value="">
+                            -- Select a registered sensor --
+                        </option>
+
+                        @foreach (var sensor in sensors)
+                        {
+                            <option value="@sensor.MacAddress">
+                                @sensor.MacAddress —
+                                @sensor.Location
+                                (@sensor.Category)
+                            </option>
+                        }
+
+                    </select>
+
+                </div>
+            </div>
+
+            @if (sensors.Count == 0)
+            {
+                <div class="alert alert-info mt-3 mb-0">
+                    No registered sensors available.
+                    Register a sensor from the Sensor Telemetry
+                    page before using device controls.
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(selectedSensorMac))
+            {
+                <div class="row g-3 mt-2">
+
+                    <!-- PUMP CONTROL -->
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+
+                            <h6 class="fw-bold">Pump Control</h6>
+
+                            <p>
+                                <strong>Current state:</strong>
+                                <span class="badge @(GetDeviceState("Pump") == "ON" ? "bg-success" : "bg-secondary")">
+                                    @GetDeviceState("Pump")
+                                </span>
+                            </p>
+
+                            <p class="text-muted">
+                                Control the simulated water pump.
+                            </p>
+
+                            <button class="btn btn-success me-2 mb-2"
+                                    disabled="@(isCommandBusy || isLoading)"
+                                    @onclick='() => SendDeviceCommandAsync("Pump", "ON")'>
+                                Pump ON
+                            </button>
+
+                            <button class="btn btn-outline-danger mb-2"
+                                    disabled="@(isCommandBusy || isLoading)"
+                                    @onclick='() => SendDeviceCommandAsync("Pump", "OFF")'>
+                                Pump OFF
+                            </button>
+
+                        </div>
+                    </div>
+
+                    <!-- RELAY CONTROL -->
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+
+                            <h6 class="fw-bold">Relay Control</h6>
+
+                            <p>
+                                <strong>Current state:</strong>
+                                <span class="badge @(GetDeviceState("Relay") == "ON" ? "bg-success" : "bg-secondary")">
+                                    @GetDeviceState("Relay")
+                                </span>
+                            </p>
+
+                            <p class="text-muted">
+                                Control the simulated relay switch.
+                            </p>
+
+                            <button class="btn btn-success me-2 mb-2"
+                                    disabled="@(isCommandBusy || isLoading)"
+                                    @onclick='() => SendDeviceCommandAsync("Relay", "ON")'>
+                                Relay ON
+                            </button>
+
+                            <button class="btn btn-outline-danger mb-2"
+                                    disabled="@(isCommandBusy || isLoading)"
+                                    @onclick='() => SendDeviceCommandAsync("Relay", "OFF")'>
+                                Relay OFF
+                            </button>
+
+                        </div>
+                    </div>
+
+                </div>
+            }
+
+            <!-- COMMAND UNDO -->
+            <div class="border-top mt-4 pt-3">
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+
+                    <div>
+                        <h6 class="fw-bold mb-1">
+                            Command Undo
+                        </h6>
+
+                        <p class="text-muted mb-2">
+                            Reverse the most recently executed device command
+                            using the global LIFO undo stack.
+                        </p>
+
+                        <span class="badge bg-secondary">
+                            Available Undos: @commandStatus.UndoCount
+                        </span>
+
+                        <span class="badge bg-info text-dark ms-2">
+                            History Records: @commandStatus.HistoryCount
+                        </span>
+                    </div>
+
+                    <button class="btn btn-warning"
+                            disabled="@(isCommandBusy || isLoading || !commandStatus.UndoAvailable)"
+                            @onclick="UndoLastCommandAsync">
+                        Undo Last Command
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- DEVICE COMMAND HISTORY -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h5 class="fw-semibold mb-1">
+                        Device Command History
+                    </h5>
+
+                    <p class="text-muted mb-0">
+                        Audit trail of manual device commands and
+                        LIFO undo operations.
+                    </p>
+                </div>
+
+                <span class="badge bg-secondary">
+                    @commandHistory.Count records
+                </span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Timestamp</th>
+                            <th>Sensor MAC</th>
+                            <th>Device</th>
+                            <th>Action</th>
+                            <th>Previous</th>
+                            <th>New</th>
+                            <th>Type</th>
+                            <th>Reverses</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @if (commandHistory.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="9"
+                                    class="text-center text-muted py-4">
+                                    No device commands have been recorded yet.
+                                    Execute a Pump or Relay command to begin.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var command in commandHistory
+                                .OrderByDescending(x => x.Id)
+                                .Take(30))
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>#@command.Id</strong>
+                                    </td>
+
+                                    <td class="text-nowrap">
+                                        @command.Timestamp.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss")
+                                    </td>
+
+                                    <td>
+                                        <code>@command.MacAddress</code>
+                                    </td>
+
+                                    <td>@command.DeviceType</td>
+
+                                    <td>
+                                        <span class="badge @(command.Action == "ON" ? "bg-success" : "bg-secondary")">
+                                            @command.Action
+                                        </span>
+                                    </td>
+
+                                    <td>@command.PreviousState</td>
+
+                                    <td>@command.NewState</td>
+
+                                    <td>
+                                        @if (command.IsUndo)
+                                        {
+                                            <span class="badge bg-warning text-dark">
+                                                Undo
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-primary">
+                                                Manual
+                                            </span>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        @if (command.UndoesCommandId.HasValue)
+                                        {
+                                            <span class="badge bg-light text-dark border">
+                                                #@command.UndoesCommandId.Value
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+
+                </table>
+            </div>
+
+            <p class="text-muted small mb-0">
+                Showing up to 30 most recent records.
+                Undo operations remain in the audit history
+                and reference the original command they reversed.
+            </p>
+
+        </div>
+    </div>
+
+    <!-- RECENT PROCESSED TELEMETRY -->
     <div class="card shadow-sm mb-4">
         <div class="card-body">
 
@@ -261,21 +557,212 @@
 
     private bool isLoading;
     private bool hasLoaded;
+    private bool isCommandBusy;
+
     private string errorMessage = string.Empty;
+    private string commandMessage = string.Empty;
+
+    private string selectedSensorMac = string.Empty;
 
     private List<SensorDto> sensors = new();
     private ProcessingStatusDto processingStatus = new();
     private ProcessingModeDto processingMode = new();
     private List<TelemetryJobDto> telemetryHistory = new();
 
+    private CommandStatusDto commandStatus = new();
+    private List<DeviceCommandDto> commandHistory = new();
+
+    // Device states keyed by MAC address and device type.
+    private Dictionary<string, string> deviceStates = new();
+
     protected override async Task OnInitializedAsync()
     {
         await LoadDashboardAsync();
     }
 
+    private string GetDeviceState(string deviceType)
+    {
+        if (string.IsNullOrWhiteSpace(selectedSensorMac))
+        {
+            return "OFF";
+        }
+
+        string key =
+            $"{selectedSensorMac}|{deviceType.ToUpperInvariant()}";
+
+        return deviceStates.TryGetValue(key, out var state)
+            ? state
+            : "OFF";
+    }
+
+    // Retrieve the LIFO undo stack and audit history counts.
+    private async Task RefreshCommandStatusAsync()
+    {
+        var result =
+            await Http.GetFromJsonAsync<CommandStatusDto>(
+                $"{ApiBaseUrl}/api/commands/status");
+
+        commandStatus = result ?? new CommandStatusDto();
+    }
+
+    // Retrieve the command audit history from the backend.
+    private async Task RefreshCommandHistoryAsync()
+    {
+        var result =
+            await Http.GetFromJsonAsync<List<DeviceCommandDto>>(
+                $"{ApiBaseUrl}/api/commands/history");
+
+        commandHistory = result ?? new List<DeviceCommandDto>();
+    }
+
+    // Execute a manual Pump or Relay command.
+    private async Task SendDeviceCommandAsync(
+        string deviceType,
+        string action)
+    {
+        if (isCommandBusy || isLoading)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedSensorMac))
+        {
+            commandMessage = string.Empty;
+            errorMessage = "Please select a registered sensor first.";
+            return;
+        }
+
+        isCommandBusy = true;
+        commandMessage = string.Empty;
+        errorMessage = string.Empty;
+
+        try
+        {
+            var request = new DeviceCommandRequest
+            {
+                MacAddress = selectedSensorMac,
+                DeviceType = deviceType,
+                Action = action
+            };
+
+            using var response = await Http.PostAsJsonAsync(
+                $"{ApiBaseUrl}/api/commands",
+                request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var updatedStates =
+                    await Http.GetFromJsonAsync<Dictionary<string, string>>(
+                        $"{ApiBaseUrl}/api/commands/states");
+
+                deviceStates = updatedStates ?? new();
+
+                await RefreshCommandStatusAsync();
+                await RefreshCommandHistoryAsync();
+
+                commandMessage =
+                    $"{deviceType} {action} executed successfully " +
+                    $"for sensor {selectedSensorMac}.";
+
+                return;
+            }
+
+            if (response.StatusCode ==
+                System.Net.HttpStatusCode.Conflict)
+            {
+                errorMessage =
+                    $"The {deviceType} command was rejected. " +
+                    "The device may already be in the requested state.";
+
+                return;
+            }
+
+            errorMessage =
+                $"Unable to execute {deviceType} {action}. " +
+                $"API returned HTTP {(int)response.StatusCode}.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                "Unable to send the device command. " +
+                "Check that SmartX.Api is running. " +
+                ex.Message;
+        }
+        finally
+        {
+            isCommandBusy = false;
+        }
+    }
+
+    // Reverse the most recent device command using LIFO.
+    private async Task UndoLastCommandAsync()
+    {
+        if (isCommandBusy || isLoading)
+        {
+            return;
+        }
+
+        isCommandBusy = true;
+        commandMessage = string.Empty;
+        errorMessage = string.Empty;
+
+        try
+        {
+            using var response = await Http.PostAsync(
+                $"{ApiBaseUrl}/api/commands/undo",
+                null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var updatedStates =
+                    await Http.GetFromJsonAsync<Dictionary<string, string>>(
+                        $"{ApiBaseUrl}/api/commands/states");
+
+                deviceStates = updatedStates ?? new();
+
+                await RefreshCommandStatusAsync();
+                await RefreshCommandHistoryAsync();
+
+                commandMessage =
+                    "Last device command successfully undone. " +
+                    "The previous device state has been restored.";
+
+                return;
+            }
+
+            if (response.StatusCode ==
+                System.Net.HttpStatusCode.Conflict)
+            {
+                await RefreshCommandStatusAsync();
+
+                errorMessage =
+                    "No commands are available to undo. " +
+                    "The undo stack is empty.";
+
+                return;
+            }
+
+            errorMessage =
+                "Unable to undo the last command. " +
+                $"API returned HTTP {(int)response.StatusCode}.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                "Unable to undo the last command. " +
+                "Check that SmartX.Api is running. " +
+                ex.Message;
+        }
+        finally
+        {
+            isCommandBusy = false;
+        }
+    }
+
+    // Refresh telemetry, device states and command history.
     private async Task LoadDashboardAsync()
     {
-        if (isLoading)
+        if (isLoading || isCommandBusy)
         {
             return;
         }
@@ -301,10 +788,29 @@
                 await Http.GetFromJsonAsync<List<TelemetryJobDto>>(
                     $"{ApiBaseUrl}/api/processing/history");
 
+            var deviceStatesResult =
+                await Http.GetFromJsonAsync<Dictionary<string, string>>(
+                    $"{ApiBaseUrl}/api/commands/states");
+
             sensors = sensorResult ?? new();
             processingStatus = statusResult ?? new();
             processingMode = modeResult ?? new();
             telemetryHistory = historyResult ?? new();
+            deviceStates = deviceStatesResult ?? new();
+
+            await RefreshCommandStatusAsync();
+            await RefreshCommandHistoryAsync();
+
+            // Preserve selected sensor if it remains registered.
+            if (!string.IsNullOrWhiteSpace(selectedSensorMac) &&
+                !sensors.Any(sensor =>
+                    string.Equals(
+                        sensor.MacAddress,
+                        selectedSensorMac,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                selectedSensorMac = string.Empty;
+            }
 
             hasLoaded = true;
         }
