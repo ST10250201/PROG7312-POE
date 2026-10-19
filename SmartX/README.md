@@ -788,3 +788,8 @@ Meaningful commits document the implementation and refinement of the application
 
 Developed for the PROG7312 Portfolio of Evidence.
 
+## Part 2 Demonstration Video
+
+The following video demonstrates the new Smart-X Part 2 functionality, including real-time telemetry processing, priority queues, device controls, command history, LIFO undo, sensor searching and filtering, and automated recommendations.
+
+**YouTube Demonstration:** https://youtu.be/oJrowKRLNmM
