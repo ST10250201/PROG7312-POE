@@ -39,3 +39,60 @@ Content-Type: text/plain
 
 Smart-X sensor diagnostic log test.
 --SmartXBoundary--
+
+
+### Register Part 2 test sensor
+POST https://localhost:7199/api/sensors
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "location": "Hydroponics Zone B",
+  "category": "Temperature"
+}
+
+
+
+### Test 1 - Normal telemetry
+POST https://localhost:7199/api/processing/enqueue
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 30,
+  "unit": "C"
+}
+
+### Test 2 - Warning telemetry
+POST https://localhost:7199/api/processing/enqueue
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 65,
+  "unit": "C"
+}
+
+### Test 3 - Critical telemetry
+POST https://localhost:7199/api/processing/enqueue
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "dataType": "Temperature",
+  "value": 95,
+  "unit": "C"
+}
+
+
+### Check queue status
+GET https://localhost:7199/api/processing/status
+
+
+### Process next telemetry job
+POST https://localhost:7199/api/processing/next
+
+### View processed telemetry history
+GET https://localhost:7199/api/processing/history

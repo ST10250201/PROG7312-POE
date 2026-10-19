@@ -13,6 +13,8 @@ builder.Services.AddSingleton<FileUploadService>();
 
 builder.Services.AddSingleton<SensorRegistry>();
 
+builder.Services.AddSingleton<TelemetryProcessingService>();
+
 builder.Services.AddSingleton<DeploymentZoneService>();
 
 builder.Services.AddSingleton<RecursiveValidationService>();
@@ -346,8 +348,137 @@ app.MapGet(
         });
     });
 
+
+// -------------------------------------------------------
+// PART 2 — REAL-TIME TELEMETRY PROCESSING
+// -------------------------------------------------------
+
+// Add a telemetry reading to the processing queue.
+app.MapPost(
+    "/api/processing/enqueue",
+    (
+        TelemetryInput telemetry,
+        SensorRegistry registry,
+        TelemetryProcessingService processor) =>
+    {
+        if (registry.FindByMacAddress(telemetry.MacAddress) == null)
+        {
+            return Results.NotFound(new
+            {
+                message = "Sensor is not registered."
+            });
+        }
+
+        if (double.IsNaN(telemetry.Value) ||
+            double.IsInfinity(telemetry.Value))
+        {
+            return Results.BadRequest(new
+            {
+                message = "Telemetry value must be finite."
+            });
+        }
+
+        processor.Enqueue(
+            telemetry.MacAddress,
+            telemetry.DataType,
+            telemetry.Value,
+            telemetry.Unit);
+
+        return Results.Accepted(
+            "/api/processing/status",
+            new
+            {
+                message = "Telemetry queued successfully.",
+                normalQueueCount = processor.NormalQueueCount,
+                criticalQueueCount = processor.CriticalQueueCount
+            });
+    });
+
+// Show pending telemetry queue counts.
+app.MapGet(
+    "/api/processing/status",
+    (TelemetryProcessingService processor) =>
+    {
+        return Results.Ok(new
+        {
+            normalQueueCount = processor.NormalQueueCount,
+            criticalQueueCount = processor.CriticalQueueCount,
+            activeAlerts = processor.GetActiveAlerts()
+        });
+    });
+
+// Process the next queued job.
+// Critical telemetry is processed before normal telemetry.
+app.MapPost(
+    "/api/processing/next",
+    (TelemetryProcessingService processor) =>
+    {
+        TelemetryJob? job = processor.ProcessNext();
+
+        if (job == null)
+        {
+            return Results.Ok(new
+            {
+                message = "No telemetry jobs are waiting.",
+                job = (TelemetryJob?)null
+            });
+        }
+
+        return Results.Ok(new
+        {
+            message = "Telemetry job processed.",
+            job
+        });
+    });
+
+// Process every currently queued job.
+app.MapPost(
+    "/api/processing/all",
+    (TelemetryProcessingService processor) =>
+    {
+        var processed = processor.ProcessAll();
+
+        return Results.Ok(new
+        {
+            message = "Queued telemetry processed.",
+            count = processed.Count,
+            jobs = processed
+        });
+    });
+
+// Chronological telemetry history.
+app.MapGet(
+    "/api/processing/history",
+    (TelemetryProcessingService processor) =>
+    {
+        return Results.Ok(processor.GetHistory());
+    });
+
+// Unique active critical alerts.
+app.MapGet(
+    "/api/processing/alerts",
+    (TelemetryProcessingService processor) =>
+    {
+        return Results.Ok(processor.GetActiveAlerts());
+    });
+
+// Manually clear an active alert.
+app.MapDelete(
+    "/api/processing/alerts/{macAddress}",
+    (string macAddress, TelemetryProcessingService processor) =>
+    {
+        bool removed = processor.ClearAlert(macAddress);
+
+        return removed
+            ? Results.Ok(new { message = "Alert cleared." })
+            : Results.NotFound(new { message = "Alert not found." });
+    });
+
+
 // -------------------------------------------------------
 // START API
 // -------------------------------------------------------
+
+
 
 app.Run();
