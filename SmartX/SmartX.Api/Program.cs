@@ -21,6 +21,9 @@ builder.Services.AddSingleton<ProcessingModeService>();
 // Stores device states, command history and the LIFO undo stack.
 builder.Services.AddSingleton<DeviceCommandService>();
 
+// Generates evidence-based recommendations from sensor and command activity.
+builder.Services.AddSingleton<RecommendationEngineService>();
+
 builder.Services.AddHostedService<TelemetryBackgroundWorker>();
 
 builder.Services.AddSingleton<DeploymentZoneService>();
@@ -673,6 +676,30 @@ app.MapGet(
             historyCount = commandService.GetHistory().Count
         });
     });
+
+
+// -------------------------------------------------------
+// PART 2 — PREDICTIVE ACTION & RECOMMENDATION ENGINE
+// -------------------------------------------------------
+
+// Generate recommendations using live sensor data,
+// device states and historical manual commands.
+app.MapGet(
+    "/api/recommendations",
+    (RecommendationEngineService recommendationEngine) =>
+    {
+        var recommendations =
+            recommendationEngine.GenerateRecommendations();
+
+        return Results.Ok(new
+        {
+            count = recommendations.Count,
+            generatedAt = DateTime.UtcNow,
+            recommendations
+        });
+    });
+
+
 
 // -------------------------------------------------------
 // START API

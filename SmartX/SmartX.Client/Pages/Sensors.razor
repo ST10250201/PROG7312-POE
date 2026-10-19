@@ -1,4 +1,5 @@
 ﻿@page "/sensors"
+@using System.Net.Http.Json
 @using SmartX.Client.Models
 @inject HttpClient Http
 
@@ -8,22 +9,18 @@
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-
         <div>
             <h1 class="fw-bold mb-1">
                 Smart-X Sensor Dashboard
             </h1>
-
             <p class="text-muted mb-0">
                 Live sensor monitoring, anomaly detection and encrypted attachment tracking.
             </p>
         </div>
 
-        <a href="/register-sensor"
-           class="btn btn-primary btn-lg">
+        <a href="/register-sensor" class="btn btn-primary btn-lg">
             + Register New Sensor
         </a>
-
     </div>
 
     <!-- STATUS CARDS -->
@@ -32,13 +29,8 @@
         <div class="col-md">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <h6 class="fw-bold">
-                        Total Sensors
-                    </h6>
-
-                    <h2 class="fw-bold mb-0">
-                        @SensorList.Count
-                    </h2>
+                    <h6 class="fw-bold">Total Sensors</h6>
+                    <h2 class="fw-bold mb-0">@SensorList.Count</h2>
                 </div>
             </div>
         </div>
@@ -46,10 +38,7 @@
         <div class="col-md">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <h6 class="fw-bold text-success">
-                        Normal
-                    </h6>
-
+                    <h6 class="fw-bold text-success">Normal</h6>
                     <h2 class="fw-bold mb-0">
                         @SensorList.Count(s => s.Status == "Normal")
                     </h2>
@@ -60,10 +49,7 @@
         <div class="col-md">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <h6 class="fw-bold text-warning">
-                        Warnings
-                    </h6>
-
+                    <h6 class="fw-bold text-warning">Warnings</h6>
                     <h2 class="fw-bold mb-0">
                         @SensorList.Count(s => s.Status == "Warning")
                     </h2>
@@ -74,10 +60,7 @@
         <div class="col-md">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <h6 class="fw-bold text-danger">
-                        Critical
-                    </h6>
-
+                    <h6 class="fw-bold text-danger">Critical</h6>
                     <h2 class="fw-bold mb-0">
                         @SensorList.Count(s => s.Status == "Critical")
                     </h2>
@@ -88,10 +71,7 @@
         <div class="col-md">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <h6 class="fw-bold text-secondary">
-                        Offline
-                    </h6>
-
+                    <h6 class="fw-bold text-secondary">Offline</h6>
                     <h2 class="fw-bold mb-0">
                         @SensorList.Count(s => s.Status == "Offline")
                     </h2>
@@ -103,94 +83,47 @@
 
     <!-- REGISTERED SENSOR SECTION -->
     <div class="card border-0 shadow-sm mb-4">
-
         <div class="card-body">
 
             <div class="d-flex justify-content-between align-items-center mb-3">
-
                 <h3 class="fw-bold mb-0">
                     Registered Sensors
                 </h3>
 
-                <a href="/register-sensor"
-                   class="btn btn-success">
+                <a href="/register-sensor" class="btn btn-success">
                     + Register Sensor
                 </a>
-
             </div>
 
             <!-- FILTERS -->
             <div class="row g-3 mb-4">
 
                 <div class="col-md-6">
-
                     <input class="form-control"
                            placeholder="Search MAC address, location, category or status"
                            @bind="SearchText"
                            @bind:event="oninput" />
-
                 </div>
 
                 <div class="col-md-3">
-
-                    <select class="form-select"
-                            @bind="SelectedCategory">
-
-                        <option value="">
-                            All Categories
-                        </option>
-
-                        <option value="Temperature">
-                            Temperature
-                        </option>
-
-                        <option value="Humidity">
-                            Humidity
-                        </option>
-
-                        <option value="Pressure">
-                            Pressure
-                        </option>
-
-                        <option value="Air Quality">
-                            Air Quality
-                        </option>
-
-                        <option value="Motion">
-                            Motion
-                        </option>
-
+                    <select class="form-select" @bind="SelectedCategory">
+                        <option value="">All Categories</option>
+                        <option value="Temperature">Temperature</option>
+                        <option value="Humidity">Humidity</option>
+                        <option value="Pressure">Pressure</option>
+                        <option value="Air Quality">Air Quality</option>
+                        <option value="Motion">Motion</option>
                     </select>
-
                 </div>
 
                 <div class="col-md-3">
-
-                    <select class="form-select"
-                            @bind="SelectedStatus">
-
-                        <option value="">
-                            All Statuses
-                        </option>
-
-                        <option value="Normal">
-                            Normal
-                        </option>
-
-                        <option value="Warning">
-                            Warning
-                        </option>
-
-                        <option value="Critical">
-                            Critical
-                        </option>
-
-                        <option value="Offline">
-                            Offline
-                        </option>
-
+                    <select class="form-select" @bind="SelectedStatus">
+                        <option value="">All Statuses</option>
+                        <option value="Normal">Normal</option>
+                        <option value="Warning">Warning</option>
+                        <option value="Critical">Critical</option>
+                        <option value="Offline">Offline</option>
                     </select>
-
                 </div>
 
             </div>
@@ -210,15 +143,13 @@
             else if (!FilteredSensors.Any())
             {
                 <div class="alert alert-info mb-0">
-                    No sensors are currently registered.
+                    No sensors match the selected filters.
                 </div>
             }
             else
             {
                 <div class="table-responsive">
-
                     <table class="table table-hover align-middle">
-
                         <thead class="table-light">
                             <tr>
                                 <th>ID</th>
@@ -231,58 +162,152 @@
                         </thead>
 
                         <tbody>
-
                             @foreach (SensorRecord sensor in FilteredSensors)
                             {
                                 <tr>
-
-                                    <td>
-                                        @sensor.Id
-                                    </td>
-
-                                    <td>
-                                        <code>
-                                            @sensor.MacAddress
-                                        </code>
-                                    </td>
-
-                                    <td>
-                                        @sensor.Location
-                                    </td>
-
-                                    <td>
-                                        @sensor.Category
-                                    </td>
-
+                                    <td>@sensor.Id</td>
+                                    <td><code>@sensor.MacAddress</code></td>
+                                    <td>@sensor.Location</td>
+                                    <td>@sensor.Category</td>
                                     <td>
                                         <span class="@GetStatusClass(sensor.Status)">
                                             @sensor.Status
                                         </span>
                                     </td>
-
-                                    
                                     <td>
-                                        @(sensor.LastSeen.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))
+                                        @sensor.LastSeen.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
                                     </td>
-
-
                                 </tr>
                             }
-
                         </tbody>
-
                     </table>
-
                 </div>
             }
 
         </div>
+    </div>
 
+    <!-- SUBMIT SENSOR READING -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+
+            <h3 class="fw-bold mb-2">
+                Submit Sensor Reading
+            </h3>
+
+            <p class="text-muted">
+                Submit live telemetry to the Smart-X processing queue.
+                Critical readings can trigger alerts and automated insights.
+            </p>
+
+            @if (!string.IsNullOrWhiteSpace(telemetrySuccessMessage))
+            {
+                <div class="alert alert-success" role="status">
+                    @telemetrySuccessMessage
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(telemetryErrorMessage))
+            {
+                <div class="alert alert-danger" role="alert">
+                    @telemetryErrorMessage
+                </div>
+            }
+
+            <div class="row g-3">
+
+                <div class="col-md-6">
+                    <label for="telemetrySensor" class="form-label fw-semibold">
+                        Select Sensor
+                    </label>
+
+                    <select id="telemetrySensor"
+                            class="form-select"
+                            @bind="selectedTelemetryMac"
+                            disabled="@(isSubmittingTelemetry || SensorList.Count == 0)">
+
+                        <option value="">-- Select a registered sensor --</option>
+
+                        @foreach (var sensor in SensorList)
+                        {
+                            <option value="@sensor.MacAddress">
+                                @sensor.MacAddress - @sensor.Location (@sensor.Category)
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="telemetryType" class="form-label fw-semibold">
+                        Data Type
+                    </label>
+
+                    <select id="telemetryType"
+                            class="form-select"
+                            @bind="telemetryDataType"
+                            disabled="@isSubmittingTelemetry">
+
+                        <option value="Temperature">Temperature</option>
+                        <option value="Humidity">Humidity</option>
+                        <option value="Pressure">Pressure</option>
+                        <option value="Air Quality">Air Quality</option>
+                        <option value="Motion">Motion</option>
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="telemetryValue" class="form-label fw-semibold">
+                        Sensor Value
+                    </label>
+
+                    <input id="telemetryValue"
+                           type="number"
+                           step="any"
+                           class="form-control"
+                           @bind="telemetryValue"
+                           disabled="@isSubmittingTelemetry" />
+                </div>
+
+                <div class="col-md-6">
+                    <label for="telemetryUnit" class="form-label fw-semibold">
+                        Measurement Unit
+                    </label>
+
+                    <input id="telemetryUnit"
+                           class="form-control"
+                           placeholder="e.g. C, %, kPa"
+                           @bind="telemetryUnit"
+                           disabled="@isSubmittingTelemetry" />
+                </div>
+
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mt-4">
+
+                <button class="btn btn-primary"
+                        disabled="@(isSubmittingTelemetry || SensorList.Count == 0)"
+                        @onclick="SubmitTelemetryAsync">
+                    @(isSubmittingTelemetry ? "Submitting..." : "Submit Reading")
+                </button>
+
+                <button class="btn btn-outline-secondary"
+                        disabled="@(isSubmittingTelemetry || isLoading)"
+                        @onclick="LoadDashboardAsync">
+                    Refresh Sensor Status
+                </button>
+
+            </div>
+
+            <p class="text-muted small mt-3 mb-0">
+                Readings are submitted to the existing telemetry API.
+                Processing depends on whether Smart-X is in Automatic or Manual mode.
+            </p>
+
+        </div>
     </div>
 
     <!-- ATTACHMENTS -->
     <div class="card border-0 shadow-sm">
-
         <div class="card-body">
 
             <h3 class="fw-bold mb-3">
@@ -298,7 +323,6 @@
             else
             {
                 <div class="table-responsive">
-
                     <table class="table table-hover align-middle">
 
                         <thead class="table-light">
@@ -313,51 +337,28 @@
                         </thead>
 
                         <tbody>
-
                             @foreach (SensorAttachment attachment in Attachments)
                             {
                                 <tr>
-
-                                    <td>
-                                        @attachment.Id
-                                    </td>
-
-                                    <td>
-                                        <code>
-                                            @attachment.SensorMacAddress
-                                        </code>
-                                    </td>
-
-                                    <td>
-                                        @attachment.OriginalFileName
-                                    </td>
-
-                                    <td>
-                                        @attachment.StoredFileName
-                                    </td>
-
-                                    <td>
-                                        @attachment.ContentType
-                                    </td>
-
+                                    <td>@attachment.Id</td>
+                                    <td><code>@attachment.SensorMacAddress</code></td>
+                                    <td>@attachment.OriginalFileName</td>
+                                    <td>@attachment.StoredFileName</td>
+                                    <td>@attachment.ContentType</td>
                                     <td>
                                         @attachment.UploadedAt
                                         .ToLocalTime()
                                         .ToString("yyyy-MM-dd HH:mm:ss")
                                     </td>
-
                                 </tr>
                             }
-
                         </tbody>
 
                     </table>
-
                 </div>
             }
 
         </div>
-
     </div>
 
 </div>
@@ -365,19 +366,24 @@
 @code {
 
     private List<SensorRecord> SensorList { get; set; } = new();
-
     private List<SensorAttachment> Attachments { get; set; } = new();
 
     private string SearchText { get; set; } = string.Empty;
-
     private string SelectedCategory { get; set; } = string.Empty;
-
     private string SelectedStatus { get; set; } = string.Empty;
 
     private bool isLoading = true;
-
     private string errorMessage = string.Empty;
 
+    // TELEMETRY SUBMISSION FORM
+    private bool isSubmittingTelemetry;
+    private string selectedTelemetryMac = string.Empty;
+    private string telemetryDataType = "Temperature";
+    private double telemetryValue = 95;
+    private string telemetryUnit = "C";
+
+    private string telemetrySuccessMessage = string.Empty;
+    private string telemetryErrorMessage = string.Empty;
 
     private IEnumerable<SensorRecord> FilteredSensors
     {
@@ -425,19 +431,16 @@
         }
     }
 
-
     protected override async Task OnInitializedAsync()
     {
         await LoadDashboardAsync();
     }
-
 
     private async Task LoadDashboardAsync()
     {
         try
         {
             isLoading = true;
-
             errorMessage = string.Empty;
 
             SensorList =
@@ -449,6 +452,16 @@
                 await Http.GetFromJsonAsync<List<SensorAttachment>>(
                     "api/attachments")
                 ?? new List<SensorAttachment>();
+
+            if (!string.IsNullOrWhiteSpace(selectedTelemetryMac) &&
+                !SensorList.Any(sensor =>
+                    string.Equals(
+                        sensor.MacAddress,
+                        selectedTelemetryMac,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                selectedTelemetryMac = string.Empty;
+            }
         }
         catch (Exception ex)
         {
@@ -461,25 +474,92 @@
         }
     }
 
+    private async Task SubmitTelemetryAsync()
+    {
+        if (isSubmittingTelemetry)
+        {
+            return;
+        }
+
+        telemetrySuccessMessage = string.Empty;
+        telemetryErrorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(selectedTelemetryMac))
+        {
+            telemetryErrorMessage = "Please select a registered sensor.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(telemetryDataType))
+        {
+            telemetryErrorMessage = "Please select a data type.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(telemetryUnit))
+        {
+            telemetryErrorMessage = "Please enter a measurement unit.";
+            return;
+        }
+
+        if (double.IsNaN(telemetryValue) ||
+            double.IsInfinity(telemetryValue))
+        {
+            telemetryErrorMessage = "Please enter a valid sensor value.";
+            return;
+        }
+
+        isSubmittingTelemetry = true;
+
+        try
+        {
+            var request = new
+            {
+                MacAddress = selectedTelemetryMac,
+                DataType = telemetryDataType,
+                Value = telemetryValue,
+                Unit = telemetryUnit
+            };
+
+            using var response =
+                await Http.PostAsJsonAsync("api/telemetry", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                telemetrySuccessMessage =
+                    $"Reading of {telemetryValue} {telemetryUnit} " +
+                    $"submitted successfully for {selectedTelemetryMac}. " +
+                    "The reading has been queued for processing.";
+
+                await LoadDashboardAsync();
+            }
+            else
+            {
+                telemetryErrorMessage =
+                    "Unable to submit telemetry. " +
+                    $"API returned HTTP {(int)response.StatusCode}.";
+            }
+        }
+        catch (Exception ex)
+        {
+            telemetryErrorMessage =
+                $"Unable to submit telemetry: {ex.Message}";
+        }
+        finally
+        {
+            isSubmittingTelemetry = false;
+        }
+    }
 
     private static string GetStatusClass(string status)
     {
         return status switch
         {
-            "Normal" =>
-                "badge bg-success",
-
-            "Warning" =>
-                "badge bg-warning text-dark",
-
-            "Critical" =>
-                "badge bg-danger",
-
-            "Offline" =>
-                "badge bg-secondary",
-
-            _ =>
-                "badge bg-dark"
+            "Normal" => "badge bg-success",
+            "Warning" => "badge bg-warning text-dark",
+            "Critical" => "badge bg-danger",
+            "Offline" => "badge bg-secondary",
+            _ => "badge bg-dark"
         };
     }
 }

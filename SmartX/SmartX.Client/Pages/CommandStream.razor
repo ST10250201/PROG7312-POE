@@ -12,8 +12,8 @@
         <div>
             <h1 class="fw-bold">Real-Time Command Stream</h1>
             <p class="text-muted mb-0">
-                Monitor live sensor telemetry, processing queues
-                and critical alerts.
+                Monitor live sensor telemetry, processing queues,
+                critical alerts and recommended actions.
             </p>
         </div>
 
@@ -335,6 +335,129 @@
                     </tbody>
 
                 </table>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- PREDICTIVE ACTION AND RECOMMENDATION ENGINE -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                    <h5 class="fw-semibold mb-1">
+                        Suggested Actions &amp; Automated Insights
+                    </h5>
+
+                    <p class="text-muted mb-0">
+                        Evidence-based recommendations generated from
+                        sensor conditions, device states and command history.
+                    </p>
+                </div>
+
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="badge bg-primary">
+                        @recommendations.Count recommendations
+                    </span>
+
+                    <button class="btn btn-outline-primary btn-sm"
+                            disabled="@(isLoading || isCommandBusy || isRefreshingInsights)"
+                            @onclick="RefreshRecommendationsAsync">
+                        @(isRefreshingInsights ? "Refreshing..." : "Refresh Insights")
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(recommendationError))
+            {
+                <div class="alert alert-warning">
+                    @recommendationError
+                </div>
+            }
+
+            @if (recommendations.Count == 0 &&
+                string.IsNullOrWhiteSpace(recommendationError))
+            {
+                <div class="alert alert-success mb-0">
+                    <strong>No recommendations currently require attention.</strong>
+
+                    <p class="mb-0 mt-2">
+                        Recommendations will appear when the engine
+                        identifies relevant sensor conditions or
+                        patterns in device command history.
+                    </p>
+                </div>
+            }
+            else
+            {
+                <div class="row g-3">
+
+                    @foreach (var recommendation in recommendations)
+                    {
+                        <div class="col-lg-6">
+                            <div class="card h-100 border">
+
+                                <div class="card-body">
+
+                                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+
+                                        <h6 class="fw-bold mb-0">
+                                            @recommendation.Title
+                                        </h6>
+
+                                        <span class="badge @GetRecommendationBadgeClass(recommendation.Severity)">
+                                            @recommendation.Severity
+                                        </span>
+
+                                    </div>
+
+                                    <p>
+                                        @recommendation.Description
+                                    </p>
+
+                                    <p class="mb-2">
+                                        <strong>Sensor:</strong>
+                                        <code>@recommendation.MacAddress</code>
+                                    </p>
+
+                                    <div class="alert alert-info mb-3">
+                                        <strong>Suggested Action</strong>
+
+                                        <p class="mb-0 mt-1">
+                                            @recommendation.RecommendedAction
+                                        </p>
+                                    </div>
+
+                                    <div class="border-top pt-3">
+                                        <p class="mb-1">
+                                            <strong>Evidence / Reason</strong>
+                                        </p>
+
+                                        <p class="text-muted small mb-2">
+                                            @recommendation.Reason
+                                        </p>
+
+                                        <small class="text-muted">
+                                            Generated:
+                                            @recommendation.GeneratedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss")
+                                        </small>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                </div>
+            }
+
+            <div class="border-top mt-3 pt-3">
+                <p class="text-muted small mb-0">
+                    These insights are advisory only. Smart-X does not
+                    automatically execute device commands from recommendations.
+                    Operators must assess conditions before taking action.
+                </p>
             </div>
 
         </div>
@@ -718,9 +841,11 @@
     private bool isLoading;
     private bool hasLoaded;
     private bool isCommandBusy;
+    private bool isRefreshingInsights;
 
     private string errorMessage = string.Empty;
     private string commandMessage = string.Empty;
+    private string recommendationError = string.Empty;
 
     private string selectedSensorMac = string.Empty;
 
@@ -779,12 +904,61 @@
     private CommandStatusDto commandStatus = new();
     private List<DeviceCommandDto> commandHistory = new();
 
+    // PREDICTIVE RECOMMENDATIONS
+    private List<DeviceRecommendationDto> recommendations = new();
+
     // Device states keyed by MAC address and device type.
     private Dictionary<string, string> deviceStates = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadDashboardAsync();
+    }
+
+    // RECOMMENDATION SEVERITY COLOURS
+    private string GetRecommendationBadgeClass(string severity)
+    {
+        return severity.ToLowerInvariant() switch
+        {
+            "critical" => "bg-danger",
+            "warning" => "bg-warning text-dark",
+            "info" => "bg-info text-dark",
+            _ => "bg-secondary"
+        };
+    }
+
+    // RETRIEVE RECOMMENDATIONS FROM THE API
+    private async Task RefreshRecommendationsAsync()
+    {
+        if (isRefreshingInsights)
+        {
+            return;
+        }
+
+        isRefreshingInsights = true;
+        recommendationError = string.Empty;
+
+        try
+        {
+            var response =
+                await Http.GetFromJsonAsync<RecommendationsResponseDto>(
+                    $"{ApiBaseUrl}/api/recommendations");
+
+            recommendations =
+                response?.Recommendations
+                ?? new List<DeviceRecommendationDto>();
+        }
+        catch (Exception ex)
+        {
+            recommendationError =
+                "Unable to load recommendations. " +
+                "Check that SmartX.Api is running. " +
+                ex.Message;
+        }
+        finally
+        {
+            isRefreshingInsights = false;
+        }
     }
 
     private string GetDeviceState(string deviceType)
@@ -866,6 +1040,7 @@
 
                 await RefreshCommandStatusAsync();
                 await RefreshCommandHistoryAsync();
+                await RefreshRecommendationsAsync();
 
                 commandMessage =
                     $"{deviceType} {action} executed successfully " +
@@ -929,6 +1104,7 @@
 
                 await RefreshCommandStatusAsync();
                 await RefreshCommandHistoryAsync();
+                await RefreshRecommendationsAsync();
 
                 commandMessage =
                     "Last device command successfully undone. " +
@@ -966,7 +1142,7 @@
         }
     }
 
-    // Refresh telemetry, device states and command history.
+    // Refresh telemetry, device states, command history and insights.
     private async Task LoadDashboardAsync()
     {
         if (isLoading || isCommandBusy)
@@ -1007,6 +1183,7 @@
 
             await RefreshCommandStatusAsync();
             await RefreshCommandHistoryAsync();
+            await RefreshRecommendationsAsync();
 
             // Preserve selected sensor if it remains registered.
             if (!string.IsNullOrWhiteSpace(selectedSensorMac) &&

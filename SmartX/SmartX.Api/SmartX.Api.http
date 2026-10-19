@@ -376,3 +376,19 @@ Content-Type: application/json
   "value": 95,
   "unit": "C"
 }
+
+
+
+
+POST https://localhost:7199/api/sensors
+Content-Type: application/json
+
+{
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "category": "Temperature",
+  "location": "Hydroponics Zone B"
+}
+
+
+
+GET https://localhost:7199/api/recommendations
