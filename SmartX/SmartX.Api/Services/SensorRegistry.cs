@@ -105,5 +105,64 @@ namespace SmartX.Api.Services
                 return _nextId++;
             }
         }
+
+
+
+        public bool UpdateTelemetry(
+            string macAddress,
+            double value,
+            string unit,
+            DateTime receivedAt)
+        {
+            if (string.IsNullOrWhiteSpace(macAddress) ||
+                double.IsNaN(value) ||
+                double.IsInfinity(value))
+            {
+                return false;
+            }
+
+            lock (_lock)
+            {
+                if (!_sensors.TryGetValue(
+                    macAddress.Trim(),
+                    out SensorRecord? sensor))
+                {
+                    return false;
+                }
+
+                // Prevent an older reading from overwriting newer telemetry.
+                if (sensor.LastTelemetryAt.HasValue &&
+                    receivedAt < sensor.LastTelemetryAt.Value)
+                {
+                    return false;
+                }
+
+                sensor.LatestValue = value;
+                sensor.LatestUnit = unit ?? string.Empty;
+                sensor.LastTelemetryAt = receivedAt;
+                sensor.LastSeen = receivedAt;
+
+                sensor.Status = value switch
+                {
+                    >= 80 => "Critical",
+                    >= 60 => "Warning",
+                    _ => "Normal"
+                };
+
+                return true;
+            }
+        }
+
+
+
     }
+
+
+
+
+
+
+
+
+
 }

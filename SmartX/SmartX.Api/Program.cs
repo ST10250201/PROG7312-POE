@@ -1,3 +1,4 @@
+
 using SmartX.Api.Models;
 using SmartX.Api.Services;
 
@@ -126,7 +127,19 @@ app.MapPost(
 
         sensor.LastSeen = DateTime.UtcNow;
 
-        registry.Add(sensor);
+        try
+        {
+            registry.Add(sensor);
+        }
+        catch (InvalidOperationException)
+        {
+            // Handles concurrent duplicate registrations.
+            return Results.Conflict(new
+            {
+                message =
+                    "A sensor with this MAC address is already registered."
+            });
+        }
 
         return Results.Created(
             $"/api/sensors/{sensor.Id}",
@@ -134,7 +147,7 @@ app.MapPost(
     });
 
 // -------------------------------------------------------
-// TELEMETRY ENDPOINTS
+// TELEMETRY ENDPOINTS — PART 1
 // -------------------------------------------------------
 
 app.MapPost(
@@ -155,7 +168,18 @@ app.MapPost(
             });
         }
 
+        if (double.IsNaN(telemetry.Value) ||
+            double.IsInfinity(telemetry.Value))
+        {
+            return Results.BadRequest(new
+            {
+                message = "Telemetry value must be finite."
+            });
+        }
+
         telemetryHistory.Add(telemetry);
+
+        DateTime receivedAt = DateTime.UtcNow;
 
         var packet = new TelemetryPacket<double>
         {
@@ -163,27 +187,19 @@ app.MapPost(
             DataType = telemetry.DataType,
             Value = telemetry.Value,
             Unit = telemetry.Unit,
-            Timestamp = DateTime.UtcNow,
+            Timestamp = receivedAt,
             IsValid = true,
             ValidationMessage = "Telemetry accepted"
         };
 
         telemetryPackets.Add(packet);
 
-        sensor.LastSeen = DateTime.UtcNow;
-
-        if (telemetry.Value >= 80)
-        {
-            sensor.Status = "Critical";
-        }
-        else if (telemetry.Value >= 60)
-        {
-            sensor.Status = "Warning";
-        }
-        else
-        {
-            sensor.Status = "Normal";
-        }
+        // Update the sensor through the thread-safe registry method.
+        registry.UpdateTelemetry(
+            telemetry.MacAddress,
+            telemetry.Value,
+            telemetry.Unit,
+            receivedAt);
 
         return Results.Ok(new
         {
@@ -288,7 +304,6 @@ app.MapGet("/api/attachments", () =>
 
 // -------------------------------------------------------
 // DEPLOYMENT ZONE ENDPOINT
-// Jagged array converted to List<string>
 // -------------------------------------------------------
 
 app.MapGet(
@@ -348,12 +363,11 @@ app.MapGet(
         });
     });
 
-
 // -------------------------------------------------------
 // PART 2 — REAL-TIME TELEMETRY PROCESSING
 // -------------------------------------------------------
 
-// Add a telemetry reading to the processing queue.
+// Add telemetry to the appropriate queue.
 app.MapPost(
     "/api/processing/enqueue",
     (
@@ -394,7 +408,7 @@ app.MapPost(
             });
     });
 
-// Show pending telemetry queue counts.
+// Show pending queue counts and active alerts.
 app.MapGet(
     "/api/processing/status",
     (TelemetryProcessingService processor) =>
@@ -407,11 +421,12 @@ app.MapGet(
         });
     });
 
-// Process the next queued job.
-// Critical telemetry is processed before normal telemetry.
+// Process one job and update its sensor.
 app.MapPost(
     "/api/processing/next",
-    (TelemetryProcessingService processor) =>
+    (
+        TelemetryProcessingService processor,
+        SensorRegistry registry) =>
     {
         TelemetryJob? job = processor.ProcessNext();
 
@@ -424,29 +439,39 @@ app.MapPost(
             });
         }
 
+        bool updated = registry.UpdateTelemetry(
+            job.MacAddress,
+            job.Value,
+            job.Unit,
+            job.Timestamp);
+
         return Results.Ok(new
         {
             message = "Telemetry job processed.",
+            sensorUpdated = updated,
             job
         });
     });
 
-// Process every currently queued job.
+// Process all queued jobs and update registered sensors.
 app.MapPost(
     "/api/processing/all",
-    (TelemetryProcessingService processor) =>
+    (
+        TelemetryProcessingService processor,
+        SensorRegistry registry) =>
     {
-        var processed = processor.ProcessAll();
+        var processed =
+            processor.ProcessPendingAndUpdateSensors(registry);
 
         return Results.Ok(new
         {
-            message = "Queued telemetry processed.",
+            message = "Queued telemetry processed and sensors updated.",
             count = processed.Count,
             jobs = processed
         });
     });
 
-// Chronological telemetry history.
+// Retrieve timestamp-ordered telemetry history.
 app.MapGet(
     "/api/processing/history",
     (TelemetryProcessingService processor) =>
@@ -454,7 +479,7 @@ app.MapGet(
         return Results.Ok(processor.GetHistory());
     });
 
-// Unique active critical alerts.
+// Retrieve unique active critical alerts.
 app.MapGet(
     "/api/processing/alerts",
     (TelemetryProcessingService processor) =>
@@ -462,10 +487,12 @@ app.MapGet(
         return Results.Ok(processor.GetActiveAlerts());
     });
 
-// Manually clear an active alert.
+// Clear an active critical alert.
 app.MapDelete(
     "/api/processing/alerts/{macAddress}",
-    (string macAddress, TelemetryProcessingService processor) =>
+    (
+        string macAddress,
+        TelemetryProcessingService processor) =>
     {
         bool removed = processor.ClearAlert(macAddress);
 
@@ -474,11 +501,8 @@ app.MapDelete(
             : Results.NotFound(new { message = "Alert not found." });
     });
 
-
 // -------------------------------------------------------
 // START API
 // -------------------------------------------------------
-
-
 
 app.Run();

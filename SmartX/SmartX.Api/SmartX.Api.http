@@ -96,3 +96,6 @@ POST https://localhost:7199/api/processing/next
 
 ### View processed telemetry history
 GET https://localhost:7199/api/processing/history
+
+  ### Verify sensor status after processing
+GET https://localhost:7199/api/sensors

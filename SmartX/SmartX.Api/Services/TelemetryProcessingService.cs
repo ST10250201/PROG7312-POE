@@ -31,7 +31,9 @@ namespace SmartX.Api.Services
             get
             {
                 lock (_lock)
+                {
                     return _normalQueue.Count;
+                }
             }
         }
 
@@ -40,9 +42,15 @@ namespace SmartX.Api.Services
             get
             {
                 lock (_lock)
+                {
                     return _criticalQueue.Count;
+                }
             }
         }
+
+        // -------------------------------------------------------
+        // ENQUEUE TELEMETRY
+        // -------------------------------------------------------
 
         public void Enqueue(
             string macAddress,
@@ -51,8 +59,10 @@ namespace SmartX.Api.Services
             string unit)
         {
             if (string.IsNullOrWhiteSpace(macAddress))
+            {
                 throw new ArgumentException(
                     "MAC address is required.");
+            }
 
             lock (_lock)
             {
@@ -70,7 +80,9 @@ namespace SmartX.Api.Services
                 {
                     job.Priority = 0;
 
-                    _criticalQueue.Enqueue(job, job.Priority);
+                    _criticalQueue.Enqueue(
+                        job,
+                        job.Priority);
 
                     _activeAlerts.Add(job.MacAddress);
                 }
@@ -82,6 +94,10 @@ namespace SmartX.Api.Services
                 }
             }
         }
+
+        // -------------------------------------------------------
+        // PROCESS NEXT TELEMETRY JOB
+        // -------------------------------------------------------
 
         public TelemetryJob? ProcessNext()
         {
@@ -102,11 +118,13 @@ namespace SmartX.Api.Services
                     return null;
                 }
 
-                // Ensure unique timestamp keys.
+                // Prevent duplicate timestamp keys.
                 DateTime key = job.Timestamp;
 
                 while (_history.ContainsKey(key))
+                {
                     key = key.AddTicks(1);
+                }
 
                 _history.Add(key, job);
 
@@ -114,22 +132,67 @@ namespace SmartX.Api.Services
             }
         }
 
+        // -------------------------------------------------------
+        // PROCESS ALL QUEUED JOBS
+        // -------------------------------------------------------
+
         public IReadOnlyList<TelemetryJob> ProcessAll()
         {
             var processed = new List<TelemetryJob>();
 
             while (true)
             {
-                var job = ProcessNext();
+                TelemetryJob? job = ProcessNext();
 
                 if (job == null)
+                {
                     break;
+                }
 
                 processed.Add(job);
             }
 
             return processed;
         }
+
+        // -------------------------------------------------------
+        // PART 2 — PROCESS JOBS AND UPDATE SENSOR REGISTRY
+        // -------------------------------------------------------
+
+        public IReadOnlyList<TelemetryJob>
+            ProcessPendingAndUpdateSensors(
+                SensorRegistry registry)
+        {
+            ArgumentNullException.ThrowIfNull(registry);
+
+            var processed = new List<TelemetryJob>();
+
+            while (true)
+            {
+                TelemetryJob? job = ProcessNext();
+
+                if (job == null)
+                {
+                    break;
+                }
+
+                // Update the sensor using its original timestamp.
+                // Older readings cannot overwrite newer readings.
+                registry.UpdateTelemetry(
+                    job.MacAddress,
+                    job.Value,
+                    job.Unit,
+                    job.Timestamp);
+
+                processed.Add(job);
+            }
+
+            return processed;
+        }
+
+        // -------------------------------------------------------
+        // CHRONOLOGICAL TELEMETRY HISTORY
+        // -------------------------------------------------------
 
         public IReadOnlyList<TelemetryJob> GetHistory()
         {
@@ -139,34 +202,50 @@ namespace SmartX.Api.Services
             }
         }
 
+        // -------------------------------------------------------
+        // UNIQUE ACTIVE CRITICAL ALERTS
+        // -------------------------------------------------------
+
         public IReadOnlyList<string> GetActiveAlerts()
         {
             lock (_lock)
             {
-                return _activeAlerts.OrderBy(x => x).ToList();
+                return _activeAlerts
+                    .OrderBy(mac => mac)
+                    .ToList();
             }
         }
 
         public bool ClearAlert(string macAddress)
         {
+            if (string.IsNullOrWhiteSpace(macAddress))
+            {
+                return false;
+            }
+
             lock (_lock)
             {
-                return _activeAlerts.Remove(macAddress);
+                return _activeAlerts.Remove(
+                    macAddress.Trim());
             }
         }
     }
+
+    // -------------------------------------------------------
+    // TELEMETRY JOB MODEL
+    // -------------------------------------------------------
 
     public class TelemetryJob
     {
         public long Sequence { get; set; }
 
-        public string MacAddress { get; set; } = "";
+        public string MacAddress { get; set; } = string.Empty;
 
-        public string DataType { get; set; } = "";
+        public string DataType { get; set; } = string.Empty;
 
         public double Value { get; set; }
 
-        public string Unit { get; set; } = "";
+        public string Unit { get; set; } = string.Empty;
 
         public DateTime Timestamp { get; set; }
 
