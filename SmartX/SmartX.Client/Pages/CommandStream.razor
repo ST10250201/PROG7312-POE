@@ -180,6 +180,166 @@
 
     </div>
 
+    <!-- SENSOR SEARCH AND FILTERING -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h5 class="fw-semibold mb-1">
+                        Sensor Search &amp; Filtering
+                    </h5>
+
+                    <p class="text-muted mb-0">
+                        Search sensors by MAC address or location,
+                        filter by category, and identify active critical alerts.
+                    </p>
+                </div>
+
+                <span class="badge bg-primary">
+                    @FilteredSensors.Count of @sensors.Count sensors
+                </span>
+            </div>
+
+            <div class="row g-3 mb-3">
+
+                <!-- SEARCH INPUT -->
+                <div class="col-lg-5">
+                    <label for="sensorSearch"
+                           class="form-label fw-semibold">
+                        Search MAC Address or Location
+                    </label>
+
+                    <input id="sensorSearch"
+                           class="form-control"
+                           placeholder="e.g. Zone B or AA:BB:CC"
+                           @bind="sensorSearchText"
+                           @bind:event="oninput" />
+                </div>
+
+                <!-- CATEGORY FILTER -->
+                <div class="col-lg-4">
+                    <label for="sensorCategory"
+                           class="form-label fw-semibold">
+                        Sensor Category
+                    </label>
+
+                    <select id="sensorCategory"
+                            class="form-select"
+                            @bind="selectedSensorCategory">
+
+                        <option value="All">All Categories</option>
+
+                        @foreach (var category in AvailableSensorCategories)
+                        {
+                            <option value="@category">
+                                @category
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+                <!-- ACTIVE ALERT FILTER -->
+                <div class="col-lg-3 d-flex align-items-end">
+                    <div class="form-check mb-2">
+
+                        <input id="activeAlertsOnly"
+                               class="form-check-input"
+                               type="checkbox"
+                               @bind="showActiveAlertsOnly" />
+
+                        <label for="activeAlertsOnly"
+                               class="form-check-label">
+                            Active Alerts Only
+                        </label>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RESET FILTERS -->
+            <div class="d-flex justify-content-end mb-3">
+                <button class="btn btn-outline-secondary"
+                        @onclick="ResetSensorFilters">
+                    Reset Filters
+                </button>
+            </div>
+
+            <!-- FILTERED SENSOR RESULTS -->
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+
+                    <thead>
+                        <tr>
+                            <th>MAC Address</th>
+                            <th>Category</th>
+                            <th>Location</th>
+                            <th>Status</th>
+                            <th>Critical Alert</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @if (FilteredSensors.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5"
+                                    class="text-center text-muted py-4">
+                                    No sensors match the selected filters.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var sensor in FilteredSensors)
+                            {
+                                bool hasAlert =
+                                    processingStatus.ActiveAlerts.Contains(
+                                        sensor.MacAddress,
+                                        StringComparer.OrdinalIgnoreCase);
+
+                                <tr>
+                                    <td>
+                                        <code>@sensor.MacAddress</code>
+                                    </td>
+
+                                    <td>@sensor.Category</td>
+
+                                    <td>@sensor.Location</td>
+
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            @sensor.Status
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        @if (hasAlert)
+                                        {
+                                            <span class="badge bg-danger">
+                                                Critical
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">
+                                                None
+                                            </span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+
+                </table>
+            </div>
+
+        </div>
+    </div>
+
     <!-- DEVICE CONTROL PANEL -->
     <div class="card shadow-sm mb-4">
         <div class="card-body">
@@ -565,6 +725,53 @@
     private string selectedSensorMac = string.Empty;
 
     private List<SensorDto> sensors = new();
+
+    // SENSOR SEARCH AND FILTER STATE
+    private string sensorSearchText = string.Empty;
+    private string selectedSensorCategory = "All";
+    private bool showActiveAlertsOnly = false;
+
+    // AVAILABLE SENSOR CATEGORIES
+    private IEnumerable<string> AvailableSensorCategories =>
+        sensors
+            .Select(sensor => sensor.Category)
+            .Where(category => !string.IsNullOrWhiteSpace(category))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(category => category);
+
+    // COMBINED SENSOR FILTERING
+    private List<SensorDto> FilteredSensors =>
+        sensors
+            .Where(sensor =>
+                string.IsNullOrWhiteSpace(sensorSearchText)
+                || sensor.MacAddress.Contains(
+                    sensorSearchText.Trim(),
+                    StringComparison.OrdinalIgnoreCase)
+                || sensor.Location.Contains(
+                    sensorSearchText.Trim(),
+                    StringComparison.OrdinalIgnoreCase))
+            .Where(sensor =>
+                selectedSensorCategory == "All"
+                || string.Equals(
+                    sensor.Category,
+                    selectedSensorCategory,
+                    StringComparison.OrdinalIgnoreCase))
+            .Where(sensor =>
+                !showActiveAlertsOnly
+                || processingStatus.ActiveAlerts.Contains(
+                    sensor.MacAddress,
+                    StringComparer.OrdinalIgnoreCase))
+            .OrderBy(sensor => sensor.MacAddress)
+            .ToList();
+
+    // RESET ALL SENSOR FILTERS
+    private void ResetSensorFilters()
+    {
+        sensorSearchText = string.Empty;
+        selectedSensorCategory = "All";
+        showActiveAlertsOnly = false;
+    }
+
     private ProcessingStatusDto processingStatus = new();
     private ProcessingModeDto processingMode = new();
     private List<TelemetryJobDto> telemetryHistory = new();
