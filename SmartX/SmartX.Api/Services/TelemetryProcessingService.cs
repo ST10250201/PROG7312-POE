@@ -9,6 +9,9 @@ namespace SmartX.Api.Services
     {
         private readonly object _lock = new();
 
+        // PART 3: Self-balancing AVL tree for historical telemetry.
+        private readonly TelemetryAvlTree _telemetryTree = new();
+
         // Standard telemetry is processed in FIFO order.
         private readonly Queue<TelemetryJob> _normalQueue = new();
 
@@ -129,7 +132,12 @@ namespace SmartX.Api.Services
                     key = key.AddTicks(1);
                 }
 
+                // Preserve Part 2 chronological history.
                 _history.Add(key, job);
+
+                // PART 3: Index the processed telemetry
+                // in the self-balancing AVL tree.
+                _telemetryTree.Insert(job);
 
                 return job;
             }
@@ -231,7 +239,7 @@ namespace SmartX.Api.Services
         }
 
         // -------------------------------------------------------
-        // CHRONOLOGICAL TELEMETRY HISTORY
+        // CHRONOLOGICAL TELEMETRY HISTORY (PART 2)
         // -------------------------------------------------------
 
         public IReadOnlyList<TelemetryJob> GetHistory()
@@ -243,7 +251,77 @@ namespace SmartX.Api.Services
         }
 
         // -------------------------------------------------------
-        // UNIQUE ACTIVE CRITICAL ALERTS
+        // PART 3: AVL TREE HISTORICAL TELEMETRY QUERIES
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Retrieves historical readings for a particular sensor
+        /// within an inclusive timestamp range.
+        ///
+        /// The AVL tree prunes branches outside the requested
+        /// range before filtering by MAC address.
+        /// </summary>
+        public IReadOnlyList<TelemetryJob> GetHistoryRange(
+            string macAddress,
+            DateTime startUtc,
+            DateTime endUtc)
+        {
+            if (string.IsNullOrWhiteSpace(macAddress))
+            {
+                throw new ArgumentException(
+                    "MAC address is required.");
+            }
+
+            if (startUtc > endUtc)
+            {
+                throw new ArgumentException(
+                    "Start time cannot exceed end time.");
+            }
+
+            lock (_lock)
+            {
+                return _telemetryTree
+                    .RangeQuery(startUtc, endUtc)
+                    .Where(job => string.Equals(
+                        job.MacAddress,
+                        macAddress.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+        }
+
+        /// <summary>
+        /// Total number of processed telemetry readings
+        /// indexed in the AVL tree.
+        /// </summary>
+        public int HistoricalTelemetryCount
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _telemetryTree.Count;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Current AVL tree height, useful for demonstrating
+        /// self-balancing behaviour.
+        /// </summary>
+        public int HistoricalTreeHeight
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _telemetryTree.HeightOfTree;
+                }
+            }
+        }
+
+        // -------------------------------------------------------
+        // UNIQUE ACTIVE CRITICAL ALERTS (PART 2)
         // -------------------------------------------------------
 
         public IReadOnlyList<string> GetActiveAlerts()

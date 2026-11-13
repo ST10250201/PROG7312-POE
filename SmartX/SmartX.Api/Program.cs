@@ -18,13 +18,10 @@ builder.Services.AddSingleton<TelemetryProcessingService>();
 
 builder.Services.AddSingleton<ProcessingModeService>();
 
-// Stores device states, command history and the LIFO undo stack.
 builder.Services.AddSingleton<DeviceCommandService>();
 
-// Generates evidence-based recommendations from sensor and command activity.
 builder.Services.AddSingleton<RecommendationEngineService>();
 
-// Stores recorded sensor searches and search frequency statistics.
 builder.Services.AddSingleton<SearchHistoryService>();
 
 builder.Services.AddHostedService<TelemetryBackgroundWorker>();
@@ -162,7 +159,6 @@ app.MapPost(
 // TELEMETRY ENDPOINTS — PART 1 + PART 2
 // -------------------------------------------------------
 
-// Receive telemetry and submit it to the automatic queue.
 app.MapPost(
     "/api/telemetry",
     (
@@ -193,10 +189,8 @@ app.MapPost(
 
         DateTime receivedAt = DateTime.UtcNow;
 
-        // Preserve Part 1 telemetry history.
         telemetryHistory.Add(telemetry);
 
-        // Preserve Part 1 generic telemetry packets.
         var packet = new TelemetryPacket<double>
         {
             MacAddress = telemetry.MacAddress,
@@ -210,8 +204,6 @@ app.MapPost(
 
         telemetryPackets.Add(packet);
 
-        // Part 2: Queue the reading for background processing.
-        // Critical values enter the priority queue.
         processor.Enqueue(
             telemetry.MacAddress,
             telemetry.DataType,
@@ -384,7 +376,6 @@ app.MapGet(
 // PART 2 — REAL-TIME TELEMETRY PROCESSING
 // -------------------------------------------------------
 
-// Enqueue telemetry for processing.
 app.MapPost(
     "/api/processing/enqueue",
     (
@@ -425,7 +416,6 @@ app.MapPost(
             });
     });
 
-// Show pending queues and active alerts.
 app.MapGet(
     "/api/processing/status",
     (TelemetryProcessingService processor) =>
@@ -438,7 +428,6 @@ app.MapGet(
         });
     });
 
-// Manually process the next queued job.
 app.MapPost(
     "/api/processing/next",
     (
@@ -477,7 +466,6 @@ app.MapPost(
         });
     });
 
-// Manually process all pending jobs.
 app.MapPost(
     "/api/processing/all",
     (
@@ -495,7 +483,6 @@ app.MapPost(
         });
     });
 
-// Retrieve chronological telemetry history.
 app.MapGet(
     "/api/processing/history",
     (TelemetryProcessingService processor) =>
@@ -503,7 +490,6 @@ app.MapGet(
         return Results.Ok(processor.GetHistory());
     });
 
-// Retrieve unique active critical alerts.
 app.MapGet(
     "/api/processing/alerts",
     (TelemetryProcessingService processor) =>
@@ -511,7 +497,6 @@ app.MapGet(
         return Results.Ok(processor.GetActiveAlerts());
     });
 
-// Manually clear an active critical alert.
 app.MapDelete(
     "/api/processing/alerts/{macAddress}",
     (
@@ -523,6 +508,62 @@ app.MapDelete(
         return removed
             ? Results.Ok(new { message = "Alert cleared." })
             : Results.NotFound(new { message = "Alert not found." });
+    });
+
+// -------------------------------------------------------
+// PART 3 — AVL TREE HISTORICAL TELEMETRY
+// -------------------------------------------------------
+
+app.MapGet(
+    "/api/telemetry/history/range",
+    (
+        string macAddress,
+        DateTimeOffset startUtc,
+        DateTimeOffset endUtc,
+        TelemetryProcessingService processor) =>
+    {
+        if (string.IsNullOrWhiteSpace(macAddress))
+        {
+            return Results.BadRequest(new
+            {
+                message = "Sensor MAC address is required."
+            });
+        }
+
+        if (startUtc > endUtc)
+        {
+            return Results.BadRequest(new
+            {
+                message = "Start time cannot exceed end time."
+            });
+        }
+
+        var readings = processor.GetHistoryRange(
+            macAddress,
+            startUtc.UtcDateTime,
+            endUtc.UtcDateTime);
+
+        return Results.Ok(new
+        {
+            macAddress = macAddress.Trim(),
+            startUtc = startUtc.UtcDateTime,
+            endUtc = endUtc.UtcDateTime,
+            count = readings.Count,
+            readings
+        });
+    });
+
+app.MapGet(
+    "/api/telemetry/history/tree-stats",
+    (TelemetryProcessingService processor) =>
+    {
+        return Results.Ok(new
+        {
+            totalReadings = processor.HistoricalTelemetryCount,
+            treeHeight = processor.HistoricalTreeHeight,
+            structure = "AVL self-balancing binary search tree",
+            note = "Only processed telemetry is indexed."
+        });
     });
 
 // -------------------------------------------------------
@@ -542,7 +583,6 @@ app.MapGet(
         });
     });
 
-// Switch to Automatic processing.
 app.MapPost(
     "/api/processing/mode/automatic",
     (ProcessingModeService modeService) =>
@@ -556,7 +596,6 @@ app.MapPost(
         });
     });
 
-// Switch to Manual processing.
 app.MapPost(
     "/api/processing/mode/manual",
     (ProcessingModeService modeService) =>
@@ -574,7 +613,6 @@ app.MapPost(
 // PART 2 — DEVICE COMMANDS AND UNDO HISTORY
 // -------------------------------------------------------
 
-// Execute a manual Pump/Relay command.
 app.MapPost(
     "/api/commands",
     (
@@ -628,7 +666,6 @@ app.MapPost(
         }
     });
 
-// Undo the most recent manual command (LIFO).
 app.MapPost(
     "/api/commands/undo",
     (DeviceCommandService commandService) =>
@@ -651,7 +688,6 @@ app.MapPost(
         });
     });
 
-// Get timestamped command history.
 app.MapGet(
     "/api/commands/history",
     (DeviceCommandService commandService) =>
@@ -659,7 +695,6 @@ app.MapGet(
         return Results.Ok(commandService.GetHistory());
     });
 
-// Get current Pump/Relay states.
 app.MapGet(
     "/api/commands/states",
     (DeviceCommandService commandService) =>
@@ -667,7 +702,6 @@ app.MapGet(
         return Results.Ok(commandService.GetDeviceStates());
     });
 
-// Get command stack status.
 app.MapGet(
     "/api/commands/status",
     (DeviceCommandService commandService) =>
@@ -684,8 +718,6 @@ app.MapGet(
 // PART 2 — PREDICTIVE ACTION & RECOMMENDATION ENGINE
 // -------------------------------------------------------
 
-// Generate recommendations using live sensor data,
-// device states and historical manual commands.
 app.MapGet(
     "/api/recommendations",
     (RecommendationEngineService recommendationEngine) =>
@@ -705,7 +737,6 @@ app.MapGet(
 // PART 2 — SENSOR SEARCH HISTORY
 // -------------------------------------------------------
 
-// Record a deliberate sensor search and its filter settings.
 app.MapPost(
     "/api/search-history",
     (
@@ -731,7 +762,6 @@ app.MapPost(
             entry);
     });
 
-// Retrieve the complete search history, newest first.
 app.MapGet(
     "/api/search-history",
     (SearchHistoryService searchHistoryService) =>
@@ -739,7 +769,6 @@ app.MapGet(
         return Results.Ok(searchHistoryService.GetHistory());
     });
 
-// Retrieve search-term frequency statistics.
 app.MapGet(
     "/api/search-history/frequency",
     (SearchHistoryService searchHistoryService) =>
@@ -761,7 +790,6 @@ app.Run();
 // REQUEST MODELS
 // -------------------------------------------------------
 
-// Record declarations must appear after top-level statements.
 public record DeviceCommandRequest(
     string MacAddress,
     string DeviceType,
