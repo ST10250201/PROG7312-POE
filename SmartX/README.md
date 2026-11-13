@@ -793,3 +793,740 @@ Developed for the PROG7312 Portfolio of Evidence.
 The following video demonstrates the new Smart-X Part 2 functionality, including real-time telemetry processing, priority queues, device controls, command history, LIFO undo, sensor searching and filtering, and automated recommendations.
 
 **YouTube Demonstration:** https://youtu.be/oJrowKRLNmM
+
+
+---
+
+# Part 3: Network Topology and Mesh Routing
+
+## Overview
+
+Part 3 completes the Smart-X IoT ecosystem by introducing historical telemetry indexing, wireless mesh network modelling, graph traversal, minimum spanning tree calculations and sensor-to-gateway routing.
+
+The implementation integrates with the existing Part 1 sensor management system and Part 2 telemetry processing services.
+
+The new functionality is available through the **Network Topology** page at:
+
+`https://localhost:7239/network-topology`
+
+The application models a simulated ESP32 mesh network. Sensor nodes are identified by their MAC addresses, wireless links have configurable weights, and a designated gateway acts as the central destination.
+
+The implementation uses the following data structures and algorithms:
+
+| Component | Implementation | Purpose |
+|---|---|---|
+| Historical telemetry | Self-balancing AVL tree | Efficient timestamp-based indexing and range queries |
+| Mesh network | Weighted adjacency-list graph | Represent sensors and wireless connections |
+| Connectivity | Breadth-First Search (BFS) | Identify reachable and disconnected nodes |
+| Network optimisation | Prim's Minimum Spanning Tree | Minimise total selected wireless link weight |
+| Gateway routing | Traversal of the calculated MST | Determine a sensor's route to the gateway |
+| Node failure simulation | Offline-node tracking | Recalculate connectivity and routing when nodes fail |
+
+## 1. AVL Tree for Historical Telemetry
+
+### 1.1 Implementation
+
+The historical telemetry index is implemented in:
+
+`SmartX.Api/Services/TelemetryAvlTree.cs`
+
+The AVL tree is integrated into:
+
+`SmartX.Api/Services/TelemetryProcessingService.cs`
+
+When the telemetry processing service processes a telemetry job, it inserts the processed reading into the AVL tree.
+
+Each tree node uses a timestamp as its search key. Readings with identical timestamps can be stored together rather than overwriting one another.
+
+This is important because multiple IoT sensors can generate telemetry at the same time.
+
+### 1.2 Why an AVL Tree?
+
+An ordinary binary search tree can become unbalanced when readings arrive in chronological order.
+
+For example, inserting timestamps in increasing order can create a tree resembling a linked list.
+
+This can degrade search performance to O(n).
+
+An AVL tree maintains balance by checking the height difference between subtrees after insertion and performing rotations when necessary.
+
+The supported balancing operations include:
+
+- Left rotation
+- Right rotation
+- Left-right rotation
+- Right-left rotation
+
+Because the tree remains height-balanced, insertion and timestamp searches have O(log n) worst-case complexity.
+
+### 1.3 Historical Range Queries
+
+The AVL tree supports time-range retrieval through:
+
+`RangeQuery(startUtc, endUtc)`
+
+The algorithm uses the ordered timestamp keys to avoid exploring subtrees that cannot contain readings within the requested interval.
+
+Conceptually:
+
+```text
+Search(node, start, end):
+
+    If node is null:
+        Return
+
+    If node.timestamp >= start:
+        Search(node.left, start, end)
+
+    If start <= node.timestamp <= end:
+        Include readings stored at node
+
+    If node.timestamp <= end:
+        Search(node.right, start, end)
+```
+
+The historical telemetry service then filters the returned readings by sensor MAC address.
+
+The API endpoint is:
+
+`GET /api/telemetry/history/range`
+
+Example:
+
+```text
+GET /api/telemetry/history/range?macAddress=AA:BB:CC:DD:EE:02&startUtc=2026-11-13T00:00:00Z&endUtc=2026-11-14T00:00:00Z
+```
+
+The frontend provides an **AVL Historical Telemetry Search** section where users can enter:
+
+- Sensor MAC address
+- Start date and time in UTC
+- End date and time in UTC
+
+Matching readings are displayed in a table containing their timestamps, MAC addresses, data types, values and units.
+
+### 1.4 Complexity Analysis
+
+Let:
+
+- n = number of distinct timestamp keys in the AVL tree
+- k = number of readings returned within the requested time interval
+
+| Operation | Complexity |
+|---|---|
+| AVL insertion | O(log n) |
+| AVL balancing after insertion | O(log n) overall |
+| Timestamp lookup | O(log n) |
+| Timestamp range query | O(log n + k), assuming a balanced tree |
+| Filtering returned readings by MAC | O(k) |
+
+The current implementation uses a timestamp-based AVL index and filters by MAC address after retrieving the time interval.
+
+Therefore, its efficiency depends on the number of readings in the selected interval, not only the number belonging to the requested sensor.
+
+A possible future optimisation is to maintain a separate AVL index for each sensor MAC address.
+
+### 1.5 AVL Verification
+
+The AVL implementation was tested by submitting multiple telemetry readings through the API.
+
+A development test produced:
+
+```text
+Total processed readings: 6
+AVL tree height: 3
+Structure: AVL self-balancing binary search tree
+```
+
+A historical query for sensor:
+
+`AA:BB:CC:DD:EE:02`
+
+returned four readings in the selected date range, including:
+
+```text
+25.5 C
+21.5 C
+23.8 C
+27.2 C
+```
+
+The result demonstrates that multiple readings can be retrieved for the same sensor and that readings with identical displayed timestamps are retained.
+
+The test also confirmed that the historical search is available through the Blazor frontend.
+
+## 2. Graph-Based Mesh Network
+
+### 2.1 Implementation
+
+The mesh network is implemented in:
+
+`SmartX.Api/Services/MeshNetworkService.cs`
+
+The graph represents the simulated wireless network using an adjacency list.
+
+Its primary structure is:
+
+```csharp
+Dictionary<string, Dictionary<string, double>>
+```
+
+The outer dictionary maps a sensor MAC address to its neighbouring nodes.
+
+The inner dictionary maps each neighbouring MAC address to the weight of the wireless connection.
+
+Conceptual example:
+
+```text
+Gateway:
+    Sensor A -> weight 2
+    Sensor B -> weight 4
+
+Sensor A:
+    Gateway  -> weight 2
+    Sensor C -> weight 3
+
+Sensor B:
+    Gateway  -> weight 4
+    Sensor C -> weight 1
+```
+
+Wireless links are stored in both directions, representing an undirected weighted graph.
+
+The service prevents self-links and rejects non-positive, invalid link weights.
+
+### 2.2 Why an Adjacency List?
+
+An adjacency matrix requires O(V²) storage for V nodes, even when only a small proportion of nodes are directly connected.
+
+An adjacency list requires approximately O(V + E) storage, where:
+
+- V = number of network nodes
+- E = number of wireless connections
+
+This makes adjacency lists suitable for modelling sparse IoT networks.
+
+Dictionary-based neighbour lookup also makes it practical to add or update wireless links.
+
+### 2.3 Network Nodes and Gateway
+
+Each mesh node has:
+
+- A unique MAC address
+- A gateway designation, where applicable
+- An online or offline status
+
+The designated gateway is the starting point for connectivity checks and minimum spanning tree construction.
+
+Non-gateway mesh nodes are associated with registered Smart-X sensors.
+
+The frontend allows users to add nodes, configure wireless links and simulate sensor failures.
+
+## 3. Breadth-First Search (BFS)
+
+### 3.1 Purpose
+
+Breadth-First Search determines which sensors can currently communicate with the gateway through one or more wireless hops.
+
+This is essential in a mesh network because a sensor does not necessarily need a direct connection to the gateway.
+
+It may communicate through neighbouring sensors.
+
+### 3.2 Implementation
+
+The mesh service implements:
+
+`BreadthFirstSearch(startMac)`
+
+The algorithm uses:
+
+```csharp
+Queue<string>
+HashSet<string>
+```
+
+The queue stores nodes awaiting exploration.
+
+The HashSet prevents the same node from being visited repeatedly.
+
+Conceptual pseudocode:
+
+```text
+BFS(start):
+
+    Mark start as visited
+    Add start to queue
+
+    While queue is not empty:
+
+        current = Remove first node from queue
+
+        For each neighbour of current:
+
+            If neighbour is online and unvisited:
+                Mark neighbour as visited
+                Add neighbour to queue
+```
+
+Offline nodes are excluded from traversal.
+
+### 3.3 Connectivity Reporting
+
+The connectivity API returns:
+
+- Gateway MAC address
+- Reachable nodes
+- Disconnected nodes
+- Overall connectivity status
+
+Endpoint:
+
+`GET /api/mesh/connectivity`
+
+A node is considered reachable if BFS can find a path from the gateway through online nodes.
+
+### 3.4 Complexity
+
+BFS has time complexity:
+
+**O(V + E)**
+
+for a standard adjacency-list traversal.
+
+The current implementation sorts neighbouring MAC addresses during traversal to produce predictable output ordering. This adds sorting overhead beyond the basic BFS complexity.
+
+The visited set requires O(V) additional memory.
+
+## 4. Prim's Minimum Spanning Tree
+
+### 4.1 Purpose
+
+A minimum spanning tree connects all reachable online nodes using a subset of available wireless links with the lowest possible total weight.
+
+The Smart-X implementation uses Prim's algorithm.
+
+Wireless link weights represent configurable routing costs.
+
+Lower weights are preferred when constructing the MST.
+
+This models a power-efficiency optimisation scenario, although actual physical energy consumption is not measured.
+
+### 4.2 Implementation
+
+The algorithm starts from the configured gateway.
+
+It repeatedly selects the lowest-weight link connecting a visited node to an unvisited online node.
+
+Conceptual pseudocode:
+
+```text
+Prim(gateway):
+
+    Add gateway to visited nodes
+
+    While an eligible connection exists:
+
+        Find the minimum-weight link
+        connecting a visited node
+        to an unvisited online node
+
+        Add the new node to visited
+
+        Add the selected link to the MST
+
+        Increase total MST weight
+```
+
+The resulting MST contains no cycles.
+
+For a connected graph containing V online nodes, the MST contains V - 1 selected links.
+
+### 4.3 Complexity
+
+The current implementation scans candidate links from visited nodes to find the next minimum-weight edge.
+
+It does not use a dedicated heap-based priority queue for Prim's algorithm.
+
+For this implementation, a conservative upper bound is O(VE) time for the repeated edge scans, excluding additional collection overhead.
+
+A future optimisation could use a priority queue to improve performance on large networks.
+
+### 4.4 Gateway Routing
+
+Smart-X also calculates a route from a selected sensor to the gateway using the edges of the current MST.
+
+The result includes:
+
+- Source sensor MAC address
+- Gateway MAC address
+- Algorithm description
+- Reachability
+- Ordered MAC-address path
+- Hop count
+- Total route weight
+- Status message
+
+Endpoint:
+
+`GET /api/mesh/route?macAddress=AA:BB:CC:DD:EE:03`
+
+Example route:
+
+```text
+AA:BB:CC:DD:EE:03
+    ->
+AA:BB:CC:DD:EE:01
+    ->
+AA:BB:CC:DD:EE:00
+```
+
+Example output:
+
+```text
+Reachable: True
+Hop count: 2
+Route weight: 5
+Algorithm: MST path using Prim's algorithm
+```
+
+**Important distinction:** An MST minimises the total weight of the selected network links. The path between two nodes within an MST is not necessarily the shortest-weight path in the original graph.
+
+For shortest individual paths, Dijkstra's algorithm would be a suitable future extension.
+
+## 5. Sensor Failure and Mesh Recovery
+
+The Network Topology page allows users to simulate taking sensor nodes offline and bringing them back online.
+
+The backend maintains an offline-node set:
+
+```csharp
+HashSet<string>
+```
+
+When a sensor is marked offline:
+
+1. Its node remains visible in the topology.
+2. BFS excludes it from reachable paths.
+3. The MST is recalculated using available online nodes.
+4. The visualisation updates the node's status.
+5. Remaining sensors can use alternative configured links where available.
+
+This models the decision-making behaviour of a self-healing mesh network.
+
+It does not configure real ESP32 hardware or physically re-establish wireless connections.
+
+The system demonstrates logical recovery by recalculating available routes.
+
+### Verified Failure Scenario
+
+During development, a four-node mesh was configured with a gateway and three sensor nodes.
+
+Before failure:
+
+```text
+Mesh nodes: 4
+Reachable nodes: 4
+Disconnected nodes: 0
+MST total weight: 6
+```
+
+After taking one sensor offline:
+
+```text
+Mesh nodes: 4
+Reachable nodes: 3
+Disconnected nodes: 1
+MST total weight: 5
+```
+
+The dashboard correctly displayed the failed node and updated its network statistics.
+
+The simulation was also tested through the REST API.
+
+## 6. Network Topology Dashboard
+
+The Blazor WebAssembly frontend contains:
+
+`SmartX.Client/Pages/NetworkTopology.razor`
+
+The page integrates the backend's historical telemetry and mesh network features.
+
+### Main Dashboard Features
+
+- Total mesh node count
+- Reachable node count
+- Disconnected node count
+- MST total weight
+- Wireless mesh visualisation
+- Gateway and sensor status indicators
+- Weighted wireless link display
+- Highlighted MST links
+- BFS connectivity information
+- Prim's MST edge listing
+- Mesh node registration
+- Wireless link configuration
+- Sensor failure simulation
+- Sensor-to-gateway routing
+- AVL historical telemetry search
+
+### Visualisation
+
+The topology diagram distinguishes:
+
+- Gateway nodes
+- Online sensor nodes
+- Offline sensor nodes
+- Selected MST links
+- Other configured wireless links
+
+This allows users to observe how network connectivity and routing change when a node fails.
+
+## 7. Part 3 REST API
+
+The Part 3 backend exposes the following endpoint groups.
+
+### Historical Telemetry
+
+```http
+GET /api/telemetry/history/range
+GET /api/telemetry/history/tree-stats
+```
+
+### Mesh Network
+
+```http
+GET /api/mesh/topology
+GET /api/mesh/connectivity
+GET /api/mesh/mst
+GET /api/mesh/route?macAddress=AA:BB:CC:DD:EE:03
+```
+
+The mesh API also supports operations for adding nodes, configuring wireless links and changing node status.
+
+### API Testing
+
+The backend was tested through PowerShell using `Invoke-RestMethod`.
+
+Example:
+
+```powershell
+$base = "https://localhost:7199"
+
+Invoke-RestMethod "$base/api/mesh/connectivity" |
+    Format-List
+
+Invoke-RestMethod "$base/api/mesh/mst" |
+    Format-List
+
+Invoke-RestMethod "$base/api/telemetry/history/tree-stats" |
+    Format-List
+```
+
+The commands require the backend API to be running.
+
+## 8. Part 3 Verification Summary
+
+The following tests were successfully demonstrated during development.
+
+| Test | Observed Result |
+|---|---|
+| Compile the updated Smart-X solution | Build succeeded |
+| Add gateway and mesh sensor nodes | Nodes appeared in the topology |
+| Add weighted wireless links | Links were saved and displayed |
+| Calculate BFS connectivity | Reachable nodes identified |
+| Calculate Prim's MST | Selected edges and total weight displayed |
+| Simulate sensor failure | Offline node identified |
+| Recalculate after failure | Connectivity and MST updated |
+| Calculate gateway route | Ordered MAC path, hop count and weight returned |
+| Submit multiple telemetry readings | Readings accepted and processed |
+| Inspect AVL statistics | Six readings indexed; tree height three |
+| Search historical readings by MAC and date | Four matching readings displayed |
+| Navigate between application modules | Home, Sensor Telemetry, Command Stream and Network Topology accessible |
+
+These checks confirm the core functionality tested in the local development environment.
+
+They do not constitute a large-scale performance benchmark.
+
+## 9. Architectural Integration
+
+Smart-X uses a three-part architecture:
+
+```text
+Blazor WebAssembly Client
+          |
+          | HTTPS / REST
+          v
+ASP.NET Core Minimal API
+          |
+          +-- Sensor Registry
+          |
+          +-- Telemetry Processing Service
+          |       |
+          |       +-- FIFO Queue
+          |       +-- Priority Queue
+          |       +-- AVL Historical Index
+          |
+          +-- Device Command Service
+          |       |
+          |       +-- Command History
+          |       +-- Undo Stack
+          |
+          +-- Recommendation Engine
+          |
+          +-- Mesh Network Service
+                  |
+                  +-- Weighted Graph
+                  +-- BFS Connectivity
+                  +-- Prim's MST
+                  +-- Gateway Routing
+```
+
+The frontend communicates with the API rather than directly modifying backend data structures.
+
+This separates user interface responsibilities from processing and algorithmic logic.
+
+The service-based design also makes the individual algorithms easier to test and extend.
+
+## 10. Performance and Scalability Considerations
+
+### AVL Tree
+
+Balanced timestamp indexing avoids the worst-case linear tree height associated with an unbalanced binary search tree.
+
+Time-range queries prune irrelevant branches.
+
+For future scaling, per-sensor indexes and persistent historical storage would reduce filtering overhead and preserve readings across restarts.
+
+### Graph
+
+An adjacency list is memory-efficient for relatively sparse networks.
+
+It supports flexible node and link configuration.
+
+### BFS
+
+BFS efficiently discovers all reachable nodes from a starting gateway.
+
+It is suitable for connectivity monitoring and failure detection.
+
+### Prim's MST
+
+Prim's algorithm minimises total configured link weight.
+
+The current scanning implementation is suitable for the project's small simulated network.
+
+A priority-queue-based implementation would be preferable for much larger deployments.
+
+### Runtime Storage
+
+The mesh graph and AVL history are held in application memory.
+
+Restarting the backend clears these runtime structures.
+
+The system therefore requires nodes, links and telemetry readings to be recreated after a restart.
+
+A production system would require persistent storage and recovery procedures.
+
+## 11. Limitations
+
+Smart-X is an educational IoT management and mesh routing simulation.
+
+Current limitations include:
+
+- No direct communication with physical ESP32 devices
+- No physical wireless signal-strength measurement
+- No automatic discovery of real neighbouring devices
+- No persistent storage for the Part 3 graph or AVL index
+- No large-scale network performance benchmark
+- MST-based routing rather than shortest-path routing
+- Simulated node failures rather than hardware-level failure detection
+
+These limitations do not prevent the implemented algorithms from demonstrating the required data structures and routing concepts.
+
+## 12. Future Improvements
+
+Potential improvements include:
+
+1. Persistent telemetry storage using PostgreSQL or Azure SQL.
+2. Per-sensor AVL indexes for faster sensor-specific queries.
+3. A priority-queue implementation of Prim's algorithm.
+4. Dijkstra's algorithm for shortest-weight individual routes.
+5. Live ESP32 connectivity through MQTT.
+6. Real wireless link-cost metrics such as signal quality or estimated energy usage.
+7. Automated integration tests for graph and AVL edge cases.
+8. A CI/CD pipeline using GitHub Actions.
+9. Containerised deployment using Docker.
+10. Historical telemetry charts and alert trend analysis.
+
+## 13. Running the Complete Part 3 Application
+
+### Requirements
+
+- Windows with Visual Studio 2026
+- .NET 10 SDK
+- ASP.NET and web development workload
+- Git
+
+### Start the Projects
+
+1. Open the Smart-X solution in Visual Studio.
+2. Restore NuGet packages.
+3. Build the complete solution.
+4. Configure multiple startup projects.
+5. Set `SmartX.Api` to **Start**.
+6. Set `SmartX.Client` to **Start**.
+7. Start debugging or run without debugging.
+
+Development addresses:
+
+```text
+API:    https://localhost:7199
+Client: https://localhost:7239
+```
+
+The API must remain running for the client to retrieve live data.
+
+### Demonstration Procedure
+
+1. Open the Smart-X home dashboard.
+2. Register several sensors through Sensor Management.
+3. Submit telemetry and inspect the Command Stream.
+4. Open Network Topology.
+5. Add a gateway node.
+6. Add registered sensors as mesh nodes.
+7. Configure weighted wireless links.
+8. Inspect BFS connectivity and Prim's MST.
+9. Calculate a selected sensor's route to the gateway.
+10. Take a sensor offline and observe the updated network.
+11. Restore the sensor.
+12. Search historical telemetry using a sensor MAC address and UTC date range.
+
+### Important Runtime Note
+
+The Part 3 services use in-memory storage.
+
+If the backend is stopped and restarted, the mesh network must be configured again and new telemetry must be submitted for historical queries.
+
+## 14. GitHub and Submission
+
+The Smart-X source code is maintained in GitHub:
+
+https://github.com/ST10250201/PROG7312-POE
+
+The repository contains the application source code and development history.
+
+The final submission should include:
+
+- Complete functioning Smart-X source code
+- Updated `README.md`
+- Final project completion report in PDF format
+- Lecturer feedback incorporation record
+- Required GitHub repository information
+- Demonstration video if requested by the lecturer
+
+The existing Part 2 demonstration video is available at:
+
+https://youtu.be/oJrowKRLNmM
+
+A Part 3 demonstration should show the AVL historical search, mesh graph, BFS connectivity, Prim's MST, gateway routing and node failure simulation.
+
