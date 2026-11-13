@@ -1,19 +1,697 @@
-﻿@page "/network-topology"
+﻿
+@page "/network-topology"
+@using System.Net.Http.Json
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components
+@inject HttpClient Http
 
 <PageTitle>Network Topology | Smart-X</PageTitle>
 
-<div class="container-fluid">
-    <h1 class="fw-bold">Network Topology &amp; Mesh Routing</h1>
+<div class="container-fluid py-3">
 
-    <div class="alert alert-secondary mt-3">
-        <h5>Planned for the Final POE</h5>
-        <p class="mb-0">
-            Network topology visualisation and mesh routing
-            will be implemented in the final phase of Smart-X.
-        </p>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="fw-bold mb-1">Network Topology &amp; Mesh Routing</h1>
+            <p class="text-muted mb-0">
+                Live mesh simulation, gateway connectivity, BFS traversal and minimum spanning tree.
+            </p>
+        </div>
+
+        <button class="btn btn-primary"
+                disabled="@loading"
+                @onclick="RefreshAll">
+            @(loading ? "Refreshing..." : "Refresh Network")
+        </button>
     </div>
 
-    <NavLink class="btn btn-outline-primary mt-3" href="/command-stream">
-        Return to Command Stream
-    </NavLink>
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="alert alert-success">@message</div>
+    }
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <small class="text-muted">Mesh Nodes</small>
+                    <h2 class="fw-bold">@nodes.Count</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <small class="text-muted">Reachable Nodes</small>
+                    <h2 class="fw-bold text-success">@reachable.Count</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <small class="text-muted">Disconnected Nodes</small>
+                    <h2 class="fw-bold text-danger">@disconnected.Count</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <small class="text-muted">MST Total Weight</small>
+                    <h2 class="fw-bold">@mstWeight.ToString("0.##")</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+
+        <div class="col-xl-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold">
+                    Wireless Mesh Visualisation
+                </div>
+
+                <div class="card-body">
+                    @if (nodes.Count == 0)
+                    {
+                        <div class="alert alert-info">
+                            No mesh nodes found. Add a gateway and registered sensors below.
+                        </div>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 800 460"
+                             style="width:100%;height:auto;background:#101827;border-radius:12px">
+
+                            @foreach (var link in links)
+                            {
+                                var a = PositionOf(link.From);
+                                var b = PositionOf(link.To);
+
+                                if (a != null && b != null)
+                                {
+                                    bool selected = IsMstLink(link.From, link.To);
+
+                                    <line x1="@a.Value.X"
+                                          y1="@a.Value.Y"
+                                          x2="@b.Value.X"
+                                          y2="@b.Value.Y"
+                                          stroke="@(selected ? "#22c55e" : "#64748b")"
+                                          stroke-width="@(selected ? 4 : 2)"
+                                          stroke-dasharray="@(selected ? "none" : "7 5")" />
+
+                                    <svg:text x="@((a.Value.X + b.Value.X) / 2)"
+                                          y="@((a.Value.Y + b.Value.Y) / 2 - 8)"
+                                          fill="#f8fafc"
+                                          text-anchor="middle"
+                                          font-size="15">
+                                        @link.Weight.ToString("0.##")
+                                    </svg:text>
+                                }
+                            }
+
+                            @foreach (var node in nodes)
+                            {
+                                var p = PositionOf(node.MacAddress);
+
+                                if (p != null)
+                                {
+                                    <circle cx="@p.Value.X"
+                                            cy="@p.Value.Y"
+                                            r="24"
+                                            fill="@(node.IsGateway ? "#2563eb" : node.IsOnline ? "#16a34a" : "#dc2626")"
+                                            stroke="#f8fafc"
+                                            stroke-width="2" />
+
+                                    <svg:text x="@p.Value.X"
+                                          y="@(p.Value.Y + 5)"
+                                          fill="white"
+                                          text-anchor="middle"
+                                          font-size="13"
+                                          font-weight="bold">
+                                        @(node.IsGateway ? "GW" : (nodes.IndexOf(node) + 1).ToString())
+                                    </svg:text>
+
+                                   <svg:text x="@p.Value.X"
+                                          y="@(p.Value.Y + 43)"
+                                          fill="#f8fafc"
+                                          text-anchor="middle"
+                                          font-size="12">
+                                        @ShortMac(node.MacAddress)
+                                    </svg:text>
+                                }
+                            }
+                        </svg>
+
+                        <div class="d-flex flex-wrap gap-3 mt-3 small">
+                            <span>🔵 Gateway</span>
+                            <span>🟢 Online sensor</span>
+                            <span>🔴 Offline sensor</span>
+                            <span class="text-success fw-bold">━━ MST link</span>
+                            <span class="text-secondary">┄ Other link</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="card shadow-sm mb-3">
+                <div class="card-header fw-bold">Network Health</div>
+                <div class="card-body">
+                    <p>
+                        <strong>Gateway:</strong>
+                        @(string.IsNullOrWhiteSpace(gateway) ? "Not configured" : gateway)
+                    </p>
+
+                    <p>
+                        <strong>All nodes connected:</strong>
+                        <span class="badge @(fullyConnected ? "bg-success" : "bg-warning text-dark")">
+                            @(fullyConnected ? "Yes" : "No")
+                        </span>
+                    </p>
+
+                    <p>
+                        <strong>Online nodes connected by MST:</strong>
+                        <span class="badge @(mstConnected ? "bg-success" : "bg-danger")">
+                            @(mstConnected ? "Yes" : "No")
+                        </span>
+                    </p>
+
+                    <p class="mb-1"><strong>BFS reachable:</strong></p>
+                    @foreach (var mac in reachable)
+                    {
+                        <div class="small text-success">@mac</div>
+                    }
+
+                    @if (disconnected.Count > 0)
+                    {
+                        <hr />
+                        <p class="mb-1"><strong>Disconnected:</strong></p>
+                        @foreach (var mac in disconnected)
+                        {
+                            <div class="small text-danger">@mac</div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header fw-bold">Prim's Minimum Spanning Tree</div>
+                <div class="card-body">
+                    <p>
+                        The MST selects a network of connections with the
+                        lowest total configured link weight.
+                    </p>
+
+                    <p><strong>Total weight:</strong> @mstWeight.ToString("0.##")</p>
+
+                    @foreach (var edge in mstEdges)
+                    {
+                        <div class="border-bottom py-2 small">
+                            @ShortMac(edge.From)
+                            →
+                            @ShortMac(edge.To)
+                            <strong>(@edge.Weight.ToString("0.##"))</strong>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="row g-3 mt-1">
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold">Add Mesh Node</div>
+                <div class="card-body">
+                    <label class="form-label">MAC Address</label>
+                    <input class="form-control mb-3"
+                           @bind="newNodeMac"
+                           placeholder="AA:BB:CC:DD:EE:01" />
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gatewayCheck"
+                               @bind="newNodeGateway" />
+                        <label class="form-check-label" for="gatewayCheck">
+                            Configure as gateway
+                        </label>
+                    </div>
+
+                    <button class="btn btn-primary w-100"
+                            @onclick="AddNode">
+                        Add Node
+                    </button>
+
+                    <small class="text-muted d-block mt-2">
+                        Non-gateway nodes must already be registered sensors.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold">Configure Wireless Link</div>
+                <div class="card-body">
+                    <label class="form-label">From MAC</label>
+                    <input class="form-control mb-2"
+                           @bind="linkFrom" />
+
+                    <label class="form-label">To MAC</label>
+                    <input class="form-control mb-2"
+                           @bind="linkTo" />
+
+                    <label class="form-label">Link Weight</label>
+                    <input class="form-control mb-3"
+                           type="number"
+                           min="0.1"
+                           step="0.1"
+                           @bind="linkWeight" />
+
+                    <button class="btn btn-primary w-100"
+                            @onclick="AddLink">
+                        Save Wireless Link
+                    </button>
+
+                    <small class="text-muted d-block mt-2">
+                        Lower weights represent preferred links in the MST.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold">Sensor Failure Simulation</div>
+                <div class="card-body">
+                    @foreach (var node in nodes.Where(n => !n.IsGateway))
+                    {
+                        <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                            <div>
+                                <div class="fw-semibold">@ShortMac(node.MacAddress)</div>
+                                <small class="@(node.IsOnline ? "text-success" : "text-danger")">
+                                    @(node.IsOnline ? "Online" : "Offline")
+                                </small>
+                            </div>
+
+                            <button class="btn btn-sm @(node.IsOnline ? "btn-outline-danger" : "btn-outline-success")"
+                                    @onclick="() => ToggleNode(node)">
+                                @(node.IsOnline ? "Take Offline" : "Restore")
+                            </button>
+                        </div>
+                    }
+
+                    @if (!nodes.Any(n => !n.IsGateway))
+                    {
+                        <p class="text-muted">No sensor nodes available.</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="card shadow-sm mt-4">
+        <div class="card-header fw-bold">
+            AVL Historical Telemetry Search
+        </div>
+
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Sensor MAC</label>
+                    <input class="form-control" @bind="historyMac" />
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Start (UTC)</label>
+                    <input class="form-control"
+                           type="datetime-local"
+                           @bind="historyStart" />
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">End (UTC)</label>
+                    <input class="form-control"
+                           type="datetime-local"
+                           @bind="historyEnd" />
+                </div>
+
+                <div class="col-md-2">
+                    <button class="btn btn-outline-primary w-100"
+                            @onclick="SearchHistory">
+                        Search
+                    </button>
+                </div>
+            </div>
+
+            <p class="text-muted small mt-2">
+                Enter UTC dates. Only processed telemetry is indexed in the AVL tree.
+            </p>
+
+            @if (historySearched)
+            {
+                <h6 class="mt-3">Results: @historyResults.Count reading(s)</h6>
+
+                @if (historyResults.Count == 0)
+                {
+                    <p class="text-muted">No readings found for this range.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp (UTC)</th>
+                                    <th>Sensor</th>
+                                    <th>Data Type</th>
+                                    <th>Value</th>
+                                    <th>Unit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var reading in historyResults)
+                                {
+                                    <tr>
+                                        <td>@reading.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                        <td>@reading.MacAddress</td>
+                                        <td>@reading.DataType</td>
+                                        <td>@reading.Value</td>
+                                        <td>@reading.Unit</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <NavLink class="btn btn-outline-secondary" href="/command-stream">
+            Return to Command Stream
+        </NavLink>
+    </div>
+
 </div>
+
+@code {
+    private bool loading;
+    private string? error;
+    private string? message;
+
+    private string? gateway;
+    private bool fullyConnected;
+    private bool mstConnected;
+    private double mstWeight;
+
+    private List<MeshNode> nodes = new();
+    private List<MeshLink> links = new();
+    private List<MeshLink> mstEdges = new();
+
+    private List<string> reachable = new();
+    private List<string> disconnected = new();
+
+    private string newNodeMac = "";
+    private bool newNodeGateway;
+
+    private string linkFrom = "";
+    private string linkTo = "";
+    private double linkWeight = 1;
+
+    private string historyMac = "";
+    private DateTime historyStart = DateTime.UtcNow.Date;
+    private DateTime historyEnd = DateTime.UtcNow.Date.AddDays(1);
+
+    private bool historySearched;
+    private List<HistoryReading> historyResults = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAll();
+    }
+
+    private async Task RefreshAll()
+    {
+        loading = true;
+        error = null;
+
+        try
+        {
+            var topology = await Http.GetFromJsonAsync<TopologyResponse>(
+                "https://localhost:7199/api/mesh/topology");
+
+            var connectivity = await Http.GetFromJsonAsync<ConnectivityResponse>(
+                "https://localhost:7199/api/mesh/connectivity");
+
+            var mst = await Http.GetFromJsonAsync<MstResponse>(
+                "https://localhost:7199/api/mesh/mst");
+
+            nodes = topology?.Nodes ?? new();
+            links = topology?.Links ?? new();
+            gateway = topology?.Gateway;
+
+            reachable = connectivity?.Reachable ?? new();
+            disconnected = connectivity?.Disconnected ?? new();
+            fullyConnected = connectivity?.FullyConnected ?? false;
+
+            mstEdges = mst?.Edges ?? new();
+            mstWeight = mst?.TotalWeight ?? 0;
+            mstConnected = mst?.Connected ?? false;
+        }
+        catch (Exception ex)
+        {
+            error = "Could not load mesh network: " + ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task AddNode()
+    {
+        await ExecuteAction(async () =>
+        {
+            var response = await Http.PostAsJsonAsync(
+                "https://localhost:7199/api/mesh/nodes",
+                new
+                {
+                    macAddress = newNodeMac,
+                    isGateway = newNodeGateway
+                });
+
+            await EnsureSuccess(response);
+
+            newNodeMac = "";
+            newNodeGateway = false;
+        }, "Mesh node added.");
+    }
+
+    private async Task AddLink()
+    {
+        await ExecuteAction(async () =>
+        {
+            var response = await Http.PostAsJsonAsync(
+                "https://localhost:7199/api/mesh/links",
+                new
+                {
+                    fromMac = linkFrom,
+                    toMac = linkTo,
+                    weight = linkWeight
+                });
+
+            await EnsureSuccess(response);
+
+            linkFrom = "";
+            linkTo = "";
+            linkWeight = 1;
+        }, "Wireless link saved.");
+    }
+
+    private async Task ToggleNode(MeshNode node)
+    {
+        await ExecuteAction(async () =>
+        {
+            var response = await Http.PutAsJsonAsync(
+                "https://localhost:7199/api/mesh/nodes/status",
+                new
+                {
+                    macAddress = node.MacAddress,
+                    isOnline = !node.IsOnline
+                });
+
+            await EnsureSuccess(response);
+        }, "Node status updated.");
+    }
+
+    private async Task SearchHistory()
+    {
+        error = null;
+        historySearched = false;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(historyMac))
+            {
+                error = "Enter a sensor MAC address.";
+                return;
+            }
+
+            if (historyStart > historyEnd)
+            {
+                error = "Start time must be before end time.";
+                return;
+            }
+
+            string mac = Uri.EscapeDataString(historyMac.Trim());
+            string start = Uri.EscapeDataString(
+                DateTime.SpecifyKind(historyStart, DateTimeKind.Utc)
+                    .ToString("O"));
+            string end = Uri.EscapeDataString(
+                DateTime.SpecifyKind(historyEnd, DateTimeKind.Utc)
+                    .ToString("O"));
+
+            string url =
+                $"https://localhost:7199/api/telemetry/history/range" +
+                $"?macAddress={mac}&startUtc={start}&endUtc={end}";
+
+            var result = await Http.GetFromJsonAsync<HistoryResponse>(url);
+
+            historyResults = result?.Readings ?? new();
+            historySearched = true;
+        }
+        catch (Exception ex)
+        {
+            error = "History search failed: " + ex.Message;
+        }
+    }
+
+    private async Task ExecuteAction(Func<Task> action, string success)
+    {
+        error = null;
+        message = null;
+
+        try
+        {
+            await action();
+            await RefreshAll();
+            message = success;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private static async Task EnsureSuccess(
+        System.Net.Http.HttpResponseMessage response)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            string details = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(
+                $"API returned {(int)response.StatusCode}: {details}");
+        }
+    }
+
+    private (double X, double Y)? PositionOf(string mac)
+    {
+        int index = nodes.FindIndex(n =>
+            string.Equals(n.MacAddress, mac,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (index < 0)
+            return null;
+
+        int count = Math.Max(nodes.Count, 1);
+        double angle = (2 * Math.PI * index / count) - Math.PI / 2;
+
+        return (
+            400 + 165 * Math.Cos(angle),
+            230 + 165 * Math.Sin(angle)
+        );
+    }
+
+    private bool IsMstLink(string from, string to)
+    {
+        return mstEdges.Any(edge =>
+            (string.Equals(edge.From, from, StringComparison.OrdinalIgnoreCase) &&
+             string.Equals(edge.To, to, StringComparison.OrdinalIgnoreCase)) ||
+            (string.Equals(edge.From, to, StringComparison.OrdinalIgnoreCase) &&
+             string.Equals(edge.To, from, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static string ShortMac(string mac)
+    {
+        if (string.IsNullOrWhiteSpace(mac))
+            return "?";
+
+        return mac.Length > 8 ? mac[^8..] : mac;
+    }
+
+    public class MeshNode
+    {
+        public string MacAddress { get; set; } = "";
+        public bool IsGateway { get; set; }
+        public bool IsOnline { get; set; }
+    }
+
+    public class MeshLink
+    {
+        public string From { get; set; } = "";
+        public string To { get; set; } = "";
+        public double Weight { get; set; }
+    }
+
+    public class TopologyResponse
+    {
+        public string? Gateway { get; set; }
+        public List<MeshNode> Nodes { get; set; } = new();
+        public List<MeshLink> Links { get; set; } = new();
+    }
+
+    public class ConnectivityResponse
+    {
+        public List<string> Reachable { get; set; } = new();
+        public List<string> Disconnected { get; set; } = new();
+        public bool FullyConnected { get; set; }
+    }
+
+    public class MstResponse
+    {
+        public List<MeshLink> Edges { get; set; } = new();
+        public double TotalWeight { get; set; }
+        public bool Connected { get; set; }
+    }
+
+    public class HistoryResponse
+    {
+        public List<HistoryReading> Readings { get; set; } = new();
+    }
+
+    public class HistoryReading
+    {
+        public string MacAddress { get; set; } = "";
+        public string DataType { get; set; } = "";
+        public double Value { get; set; }
+        public string Unit { get; set; } = "";
+        public DateTime Timestamp { get; set; }
+    }
+}

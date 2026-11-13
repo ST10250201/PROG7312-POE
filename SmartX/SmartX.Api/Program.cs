@@ -5,39 +5,32 @@ using SmartX.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // -------------------------------------------------------
-// SERVICES
+// SERVICES — PARTS 1, 2 AND 3
 // -------------------------------------------------------
 
 builder.Services.AddOpenApi();
-
 builder.Services.AddSingleton<FileUploadService>();
-
 builder.Services.AddSingleton<SensorRegistry>();
-
 builder.Services.AddSingleton<TelemetryProcessingService>();
-
 builder.Services.AddSingleton<ProcessingModeService>();
-
 builder.Services.AddSingleton<DeviceCommandService>();
-
 builder.Services.AddSingleton<RecommendationEngineService>();
-
 builder.Services.AddSingleton<SearchHistoryService>();
+builder.Services.AddSingleton<DeploymentZoneService>();
+builder.Services.AddSingleton<RecursiveValidationService>();
+
+// Part 3: Shared, in-memory mesh network graph.
+builder.Services.AddSingleton<MeshNetworkService>();
 
 builder.Services.AddHostedService<TelemetryBackgroundWorker>();
-
-builder.Services.AddSingleton<DeploymentZoneService>();
-
-builder.Services.AddSingleton<RecursiveValidationService>();
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowSmartXWeb", policy =>
     {
-        policy
-            .AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod();
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
     });
 });
 
@@ -49,7 +42,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseCors("AllowSmartXWeb");
 
 // -------------------------------------------------------
@@ -57,13 +49,11 @@ app.UseCors("AllowSmartXWeb");
 // -------------------------------------------------------
 
 var telemetryHistory = new List<TelemetryInput>();
-
 var telemetryPackets = new List<TelemetryPacket<double>>();
-
 var attachments = new List<SensorAttachment>();
 
 // -------------------------------------------------------
-// ROOT ENDPOINT
+// ROOT
 // -------------------------------------------------------
 
 app.MapGet("/", () =>
@@ -75,24 +65,22 @@ app.MapGet("/", () =>
 });
 
 // -------------------------------------------------------
-// SENSOR ENDPOINTS
+// PART 1 — SENSOR REGISTRATION
 // -------------------------------------------------------
 
-app.MapGet(
-    "/api/sensors",
-    (SensorRegistry registry) =>
+app.MapGet("/api/sensors", (SensorRegistry registry) =>
+{
+    foreach (var sensor in registry.GetAll())
     {
-        foreach (var sensor in registry.GetAll())
+        if (DateTime.UtcNow - sensor.LastSeen >
+            TimeSpan.FromMinutes(2))
         {
-            if (DateTime.UtcNow - sensor.LastSeen >
-                TimeSpan.FromMinutes(2))
-            {
-                sensor.Status = "Offline";
-            }
+            sensor.Status = "Offline";
         }
+    }
 
-        return Results.Ok(registry.GetAll());
-    });
+    return Results.Ok(registry.GetAll());
+});
 
 app.MapPost(
     "/api/sensors",
@@ -132,9 +120,7 @@ app.MapPost(
         }
 
         sensor.Id = registry.GenerateNextId();
-
         sensor.Status = "Normal";
-
         sensor.LastSeen = DateTime.UtcNow;
 
         try
@@ -156,7 +142,7 @@ app.MapPost(
     });
 
 // -------------------------------------------------------
-// TELEMETRY ENDPOINTS — PART 1 + PART 2
+// PART 1 + PART 2 — TELEMETRY
 // -------------------------------------------------------
 
 app.MapPost(
@@ -167,8 +153,7 @@ app.MapPost(
         TelemetryProcessingService processor) =>
     {
         SensorRecord? sensor =
-            registry.FindByMacAddress(
-                telemetry.MacAddress);
+            registry.FindByMacAddress(telemetry.MacAddress);
 
         if (sensor == null)
         {
@@ -252,7 +237,7 @@ app.MapGet("/api/telemetry/aggregate", () =>
 });
 
 // -------------------------------------------------------
-// ATTACHMENT ENDPOINTS
+// PART 1 — ATTACHMENTS
 // -------------------------------------------------------
 
 app.MapPost(
@@ -264,8 +249,7 @@ app.MapPost(
         SensorRegistry registry) =>
     {
         SensorRecord? sensor =
-            registry.FindByMacAddress(
-                sensorMacAddress);
+            registry.FindByMacAddress(sensorMacAddress);
 
         if (sensor == null)
         {
@@ -312,7 +296,7 @@ app.MapGet("/api/attachments", () =>
 });
 
 // -------------------------------------------------------
-// DEPLOYMENT ZONE ENDPOINT
+// PART 1 — DEPLOYMENT ZONES
 // -------------------------------------------------------
 
 app.MapGet(
@@ -338,10 +322,6 @@ app.MapGet(
         });
     });
 
-// -------------------------------------------------------
-// RECURSIVE VALIDATION ENDPOINT
-// -------------------------------------------------------
-
 app.MapGet(
     "/api/validate-deployment",
     (
@@ -360,8 +340,7 @@ app.MapGet(
                 deploymentZones);
 
         bool isValid =
-            validationService.ValidateHierarchy(
-                zones);
+            validationService.ValidateHierarchy(zones);
 
         return Results.Ok(new
         {
@@ -373,7 +352,7 @@ app.MapGet(
     });
 
 // -------------------------------------------------------
-// PART 2 — REAL-TIME TELEMETRY PROCESSING
+// PART 2 — TELEMETRY PROCESSING
 // -------------------------------------------------------
 
 app.MapPost(
@@ -567,10 +546,9 @@ app.MapGet(
     });
 
 // -------------------------------------------------------
-// PART 2 — PROCESSING MODE CONTROLS
+// PART 2 — PROCESSING MODE
 // -------------------------------------------------------
 
-// Get the current processing mode.
 app.MapGet(
     "/api/processing/mode",
     (ProcessingModeService modeService) =>
@@ -610,7 +588,7 @@ app.MapPost(
     });
 
 // -------------------------------------------------------
-// PART 2 — DEVICE COMMANDS AND UNDO HISTORY
+// PART 2 — DEVICE COMMANDS AND UNDO
 // -------------------------------------------------------
 
 app.MapPost(
@@ -715,7 +693,7 @@ app.MapGet(
     });
 
 // -------------------------------------------------------
-// PART 2 — PREDICTIVE ACTION & RECOMMENDATION ENGINE
+// PART 2 — RECOMMENDATIONS
 // -------------------------------------------------------
 
 app.MapGet(
@@ -734,7 +712,7 @@ app.MapGet(
     });
 
 // -------------------------------------------------------
-// PART 2 — SENSOR SEARCH HISTORY
+// PART 2 — SEARCH HISTORY
 // -------------------------------------------------------
 
 app.MapPost(
@@ -781,6 +759,176 @@ app.MapGet(
     });
 
 // -------------------------------------------------------
+// PART 3 — MESH NETWORK TOPOLOGY
+// -------------------------------------------------------
+
+app.MapPost(
+    "/api/mesh/nodes",
+    (
+        MeshNodeRequest request,
+        MeshNetworkService mesh,
+        SensorRegistry registry) =>
+    {
+        if (string.IsNullOrWhiteSpace(request.MacAddress))
+        {
+            return Results.BadRequest(new
+            {
+                message = "MAC address is required."
+            });
+        }
+
+        if (!request.IsGateway &&
+            registry.FindByMacAddress(request.MacAddress) == null)
+        {
+            return Results.NotFound(new
+            {
+                message =
+                    "Register this sensor before adding it to the mesh."
+            });
+        }
+
+        try
+        {
+            mesh.AddNode(
+                request.MacAddress,
+                request.IsGateway);
+
+            return Results.Ok(new
+            {
+                message = "Mesh node added successfully.",
+                topology = mesh.GetTopology()
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    });
+
+app.MapPost(
+    "/api/mesh/links",
+    (
+        MeshLinkRequest request,
+        MeshNetworkService mesh) =>
+    {
+        try
+        {
+            mesh.AddLink(
+                request.FromMac,
+                request.ToMac,
+                request.Weight);
+
+            return Results.Ok(new
+            {
+                message = "Wireless link saved successfully.",
+                topology = mesh.GetTopology()
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    });
+
+app.MapGet(
+    "/api/mesh/topology",
+    (MeshNetworkService mesh) =>
+    {
+        return Results.Ok(mesh.GetTopology());
+    });
+
+app.MapGet(
+    "/api/mesh/bfs",
+    (
+        string startMac,
+        MeshNetworkService mesh) =>
+    {
+        if (string.IsNullOrWhiteSpace(startMac))
+        {
+            return Results.BadRequest(new
+            {
+                message = "Starting MAC address is required."
+            });
+        }
+
+        var traversal = mesh.BreadthFirstSearch(startMac);
+
+        return Results.Ok(new
+        {
+            startMac,
+            algorithm = "Breadth-first search",
+            visitedCount = traversal.Count,
+            traversal
+        });
+    });
+
+app.MapGet(
+    "/api/mesh/connectivity",
+    (MeshNetworkService mesh) =>
+    {
+        return Results.Ok(mesh.GetConnectivity());
+    });
+
+app.MapGet(
+    "/api/mesh/mst",
+    (MeshNetworkService mesh) =>
+    {
+        return Results.Ok(mesh.GetMinimumSpanningTree());
+    });
+
+app.MapPut(
+    "/api/mesh/nodes/status",
+    (
+        MeshNodeStatusRequest request,
+        MeshNetworkService mesh) =>
+    {
+        if (string.IsNullOrWhiteSpace(request.MacAddress))
+        {
+            return Results.BadRequest(new
+            {
+                message = "MAC address is required."
+            });
+        }
+
+        try
+        {
+            mesh.SetNodeOffline(
+                request.MacAddress,
+                !request.IsOnline);
+
+            return Results.Ok(new
+            {
+                message = request.IsOnline
+                    ? "Mesh node restored."
+                    : "Mesh node marked offline.",
+                topology = mesh.GetTopology(),
+                connectivity = mesh.GetConnectivity(),
+                spanningTree = mesh.GetMinimumSpanningTree()
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.NotFound(new
+            {
+                message = ex.Message
+            });
+        }
+    });
+
+// -------------------------------------------------------
 // START API
 // -------------------------------------------------------
 
@@ -800,3 +948,16 @@ public record SearchHistoryRequest(
     string Category,
     bool ActiveAlertsOnly,
     int ResultCount);
+
+public record MeshNodeRequest(
+    string MacAddress,
+    bool IsGateway);
+
+public record MeshLinkRequest(
+    string FromMac,
+    string ToMac,
+    double Weight);
+
+public record MeshNodeStatusRequest(
+    string MacAddress,
+    bool IsOnline);
