@@ -1528,5 +1528,4 @@ The existing Part 2 demonstration video is available at:
 
 https://youtu.be/oJrowKRLNmM
 
-A Part 3 demonstration should show the AVL historical search, mesh graph, BFS connectivity, Prim's MST, gateway routing and node failure simulation.
-
+Part 3 demonstration video is available at: https://youtu.be/Y9Nj46hrvFQ?si=BI_k79T8lP93ZJWt 
