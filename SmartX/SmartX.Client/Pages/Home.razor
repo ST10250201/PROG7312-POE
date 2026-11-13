@@ -1,131 +1,414 @@
 ﻿@page "/"
 
-<PageTitle>Smart-X Gateway</PageTitle>
+<PageTitle>Smart-X | IoT Operations Dashboard</PageTitle>
 
-<div class="container py-5">
+<div class="container-fluid px-4 py-4">
 
-    <div class="text-center mb-5">
-        <h1 class="display-5 fw-bold">
-            Smart-X Data Ingestion and Validation Gateway
-        </h1>
+    <div class="rounded-4 p-4 p-md-5 mb-4 text-white"
+         style="background:linear-gradient(120deg,#101827,#17345a);">
 
-        <p class="lead text-muted">
-            Secure IoT sensor ingestion, validation, anomaly monitoring
-            and device management.
-        </p>
+        <div class="row align-items-center g-4">
+
+            <div class="col-lg-8">
+
+                <span class="badge bg-info text-dark mb-3">
+                    SMART-X IoT MANAGEMENT PLATFORM
+                </span>
+
+                <h1 class="display-5 fw-bold mb-3">
+                    Smart Infrastructure.
+                    <span style="color:#69e6b2;">
+                        Intelligent Decisions.
+                    </span>
+                </h1>
+
+                <p class="lead mb-4"
+                   style="color:#d0deef;">
+                    Monitor connected sensors, process live telemetry,
+                    analyse historical readings and manage wireless
+                    mesh connectivity from one integrated platform.
+                </p>
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a href="/sensors"
+                       class="btn btn-success btn-lg">
+                        Open Sensor Dashboard
+                    </a>
+
+                    <a href="/network-topology"
+                       class="btn btn-outline-light btn-lg">
+                        Explore Mesh Network
+                    </a>
+
+                </div>
+
+            </div>
+
+            <div class="col-lg-4 text-center">
+
+                <div class="rounded-4 p-4"
+                     style="background:rgba(255,255,255,.08);
+                    border:1px solid rgba(255,255,255,.16);">
+
+                    <div style="font-size:3.5rem;">
+                        🌐
+                    </div>
+
+                    <h4 class="fw-bold mt-2">
+                        Network Intelligence
+                    </h4>
+
+                    <p class="mb-0"
+                       style="color:#d0deef;">
+                        Connected sensors.
+                        Efficient routing.
+                        Actionable telemetry.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="d-flex justify-content-between
+        align-items-center mb-3">
+
+        <div>
+            <h2 class="fw-bold mb-1">
+                Operations Centre
+            </h2>
+
+            <p class="text-muted mb-0">
+                Access the active Smart-X system modules.
+            </p>
+        </div>
+
+        <span class="badge bg-success">
+            Core Modules Available
+        </span>
+
     </div>
 
     <div class="row g-4">
 
-        <!-- Active Section -->
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-success">
-                <div class="card-body d-flex flex-column">
+        <div class="col-md-6 col-xl-4">
 
-                    <h3 class="card-title">
-                        Sensor Ingestion
-                    </h3>
+            <div class="card h-100 shadow-sm border-0">
 
-                    <p class="card-text">
-                        Register IoT sensors, retrieve device information,
-                        monitor telemetry, detect anomalies and review
-                        encrypted sensor attachments.
+                <div class="card-body p-4 d-flex flex-column">
+
+                    <div class="mb-3"
+                         style="font-size:2rem;">
+                        📡
+                    </div>
+
+                    <h4 class="fw-bold">
+                        Sensor Management
+                    </h4>
+
+                    <p class="text-muted">
+                        Register IoT devices, validate sensor
+                        information, monitor telemetry and
+                        review sensor status and attachments.
                     </p>
 
                     <div class="mt-auto">
+
                         <span class="badge bg-success mb-3">
                             Active
                         </span>
 
-                        <br />
+                        <div>
+                            <a href="/sensors"
+                               class="btn btn-success w-100">
+                                Open Sensor Dashboard
+                            </a>
+                        </div>
 
-                        <a href="/sensors"
-                           class="btn btn-success">
-                            Open Sensor Dashboard
-                        </a>
                     </div>
 
                 </div>
+
             </div>
+
         </div>
 
-        <!-- Disabled Section -->
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm opacity-75">
-                <div class="card-body d-flex flex-column">
+        <div class="col-md-6 col-xl-4">
 
-                    <h3 class="card-title">
+            <div class="card h-100 shadow-sm border-0">
+
+                <div class="card-body p-4 d-flex flex-column">
+
+                    <div class="mb-3"
+                         style="font-size:2rem;">
+                        ⚙️
+                    </div>
+
+                    <h4 class="fw-bold">
                         Data Processing
-                    </h3>
+                    </h4>
 
-                    <p class="card-text">
-                        Future Smart-X processing functionality for
-                        transformation and advanced processing of
-                        ingested IoT information.
+                    <p class="text-muted">
+                        Explore telemetry processing,
+                        command queues, priority handling,
+                        device alerts, recommendations
+                        and command history.
                     </p>
 
                     <div class="mt-auto">
-                        <span class="badge bg-secondary mb-3">
-                            Coming Soon
+
+                        <span class="badge bg-success mb-3">
+                            Active
                         </span>
 
-                        <br />
+                        <div>
+                            <a href="/command-stream"
+                               class="btn btn-primary w-100">
+                                Open Command Stream
+                            </a>
+                        </div>
 
-                        <button class="btn btn-secondary"
-                                disabled>
-                            Not Available
-                        </button>
                     </div>
 
                 </div>
+
             </div>
+
         </div>
 
-        <!-- Disabled Section -->
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm opacity-75">
-                <div class="card-body d-flex flex-column">
+        <div class="col-md-6 col-xl-4">
 
-                    <h3 class="card-title">
-                        Analytics
-                    </h3>
+            <div class="card h-100 shadow-sm border-0">
 
-                    <p class="card-text">
-                        Future analytical capabilities for detailed
-                        historical trends, reporting and advanced
-                        IoT insights.
+                <div class="card-body p-4 d-flex flex-column">
+
+                    <div class="mb-3"
+                         style="font-size:2rem;">
+                        🕸️
+                    </div>
+
+                    <h4 class="fw-bold">
+                        Network Topology
+                    </h4>
+
+                    <p class="text-muted">
+                        Visualise the wireless mesh,
+                        inspect gateway connectivity,
+                        run BFS traversal and calculate
+                        minimum spanning tree routes.
                     </p>
 
                     <div class="mt-auto">
-                        <span class="badge bg-secondary mb-3">
-                            Coming Soon
+
+                        <span class="badge bg-success mb-3">
+                            Active
                         </span>
 
-                        <br />
+                        <div>
+                            <a href="/network-topology"
+                               class="btn btn-primary w-100">
+                                Explore Network
+                            </a>
+                        </div>
 
-                        <button class="btn btn-secondary"
-                                disabled>
-                            Not Available
-                        </button>
                     </div>
 
                 </div>
+
             </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="card h-100 shadow-sm border-0">
+
+                <div class="card-body p-4 d-flex flex-column">
+
+                    <div class="mb-3"
+                         style="font-size:2rem;">
+                        📊
+                    </div>
+
+                    <h4 class="fw-bold">
+                        Historical Telemetry
+                    </h4>
+
+                    <p class="text-muted">
+                        Search processed sensor readings
+                        using a self-balancing AVL tree,
+                        sensor MAC addresses and
+                        UTC date ranges.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <span class="badge bg-success mb-3">
+                            Active
+                        </span>
+
+                        <div>
+                            <a href="/network-topology"
+                               class="btn btn-outline-primary w-100">
+                                Open Historical Search
+                            </a>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="card h-100 shadow-sm border-0">
+
+                <div class="card-body p-4 d-flex flex-column">
+
+                    <div class="mb-3"
+                         style="font-size:2rem;">
+                        🛡️
+                    </div>
+
+                    <h4 class="fw-bold">
+                        Network Health
+                    </h4>
+
+                    <p class="text-muted">
+                        Simulate sensor failures,
+                        identify disconnected nodes,
+                        restore network connectivity
+                        and recalculate available routes.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <span class="badge bg-success mb-3">
+                            Active
+                        </span>
+
+                        <div>
+                            <a href="/network-topology"
+                               class="btn btn-outline-primary w-100">
+                                View Network Health
+                            </a>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="card h-100 shadow-sm border-0">
+
+                <div class="card-body p-4 d-flex flex-column">
+
+                    <div class="mb-3"
+                         style="font-size:2rem;">
+                        💡
+                    </div>
+
+                    <h4 class="fw-bold">
+                        Smart Recommendations
+                    </h4>
+
+                    <p class="text-muted">
+                        Review rule-based recommendations
+                        derived from sensor conditions,
+                        operational alerts and
+                        device management information.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <span class="badge bg-success mb-3">
+                            Active
+                        </span>
+
+                        <div>
+                            <a href="/command-stream"
+                               class="btn btn-outline-primary w-100">
+                                View Recommendations
+                            </a>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
         </div>
 
     </div>
 
-    <div class="mt-5 p-4 bg-light rounded">
-        <h4>Current Smart-X Capabilities</h4>
+    <div class="card shadow-sm border-0 mt-4">
 
-        <ul class="mb-0">
-            <li>IoT sensor registration and validation</li>
-            <li>Asynchronous Minimal API communication</li>
-            <li>Real-time anomaly status monitoring</li>
-            <li>Sensor dropout detection</li>
-            <li>Search and filtering</li>
-            <li>Encrypted sensor attachment storage</li>
-        </ul>
+        <div class="card-body p-4">
+
+            <h3 class="fw-bold mb-3">
+                Platform Capabilities
+            </h3>
+
+            <div class="row g-3">
+
+                <div class="col-md-6">
+
+                    <h5 class="fw-bold text-primary">
+                        Sensor & Data Management
+                    </h5>
+
+                    <ul>
+                        <li>IoT sensor registration and validation</li>
+                        <li>ASP.NET Core Minimal API communication</li>
+                        <li>Telemetry ingestion and background processing</li>
+                        <li>Anomaly detection and sensor status monitoring</li>
+                        <li>Command queues and device recommendations</li>
+                        <li>Historical telemetry search using an AVL tree</li>
+                    </ul>
+
+                </div>
+
+                <div class="col-md-6">
+
+                    <h5 class="fw-bold text-success">
+                        Mesh Network Intelligence
+                    </h5>
+
+                    <ul>
+                        <li>Weighted adjacency-list graph</li>
+                        <li>Breadth-first search connectivity checks</li>
+                        <li>Prim's minimum spanning tree</li>
+                        <li>Gateway route calculation</li>
+                        <li>Sensor failure and recovery simulation</li>
+                        <li>Interactive network topology dashboard</li>
+                    </ul>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="text-center text-muted mt-4">
+        <small>
+            Smart-X | PROG7312 | IoT Data Ingestion,
+            Processing & Mesh Network Management
+        </small>
     </div>
 
 </div>
