@@ -34,9 +34,7 @@ namespace SmartX.Api.Services
                 }
 
                 if (isGateway)
-                {
                     _gateway = mac;
-                }
             }
         }
 
@@ -60,14 +58,20 @@ namespace SmartX.Api.Services
                 string second = secondMac.Trim();
 
                 if (string.Equals(
-                    first, second,
+                    first,
+                    second,
                     StringComparison.OrdinalIgnoreCase))
-                    throw new ArgumentException("Self-links are not allowed.");
+                {
+                    throw new ArgumentException(
+                        "Self-links are not allowed.");
+                }
 
                 if (!_graph.ContainsKey(first) ||
                     !_graph.ContainsKey(second))
+                {
                     throw new InvalidOperationException(
                         "Both nodes must exist before linking.");
+                }
 
                 _graph[first][second] = weight;
                 _graph[second][first] = weight;
@@ -76,15 +80,20 @@ namespace SmartX.Api.Services
 
         public void SetNodeOffline(string macAddress, bool offline)
         {
+            if (string.IsNullOrWhiteSpace(macAddress))
+                throw new ArgumentException("MAC address is required.");
+
             lock (_lock)
             {
-                if (!_graph.ContainsKey(macAddress))
+                string mac = macAddress.Trim();
+
+                if (!_graph.ContainsKey(mac))
                     throw new InvalidOperationException("Node not found.");
 
                 if (offline)
-                    _offline.Add(macAddress);
+                    _offline.Add(mac);
                 else
-                    _offline.Remove(macAddress);
+                    _offline.Remove(mac);
             }
         }
 
@@ -93,19 +102,25 @@ namespace SmartX.Api.Services
         {
             lock (_lock)
             {
-                if (!_graph.ContainsKey(startMac) ||
-                    _offline.Contains(startMac))
+                if (string.IsNullOrWhiteSpace(startMac))
                     return Array.Empty<string>();
+
+                string start = startMac.Trim();
+
+                if (!_graph.ContainsKey(start) ||
+                    _offline.Contains(start))
+                {
+                    return Array.Empty<string>();
+                }
 
                 var visited = new HashSet<string>(
                     StringComparer.OrdinalIgnoreCase);
 
                 var queue = new Queue<string>();
-
-                visited.Add(startMac);
-                queue.Enqueue(startMac);
-
                 var order = new List<string>();
+
+                visited.Add(start);
+                queue.Enqueue(start);
 
                 while (queue.Count > 0)
                 {
@@ -137,19 +152,21 @@ namespace SmartX.Api.Services
                     {
                         macAddress = mac,
                         isGateway = string.Equals(
-                            mac, _gateway,
+                            mac,
+                            _gateway,
                             StringComparison.OrdinalIgnoreCase),
                         isOnline = !_offline.Contains(mac)
                     })
                     .ToList();
 
                 var links = _graph
-                    .SelectMany(entry => entry.Value.Select(link => new
-                    {
-                        from = entry.Key,
-                        to = link.Key,
-                        weight = link.Value
-                    }))
+                    .SelectMany(entry =>
+                        entry.Value.Select(link => new
+                        {
+                            from = entry.Key,
+                            to = link.Key,
+                            weight = link.Value
+                        }))
                     .Where(link => string.Compare(
                         link.from,
                         link.to,
@@ -195,6 +212,69 @@ namespace SmartX.Api.Services
             }
         }
 
+        // -------------------------------------------------------
+        // PRIM'S MINIMUM SPANNING TREE
+        // -------------------------------------------------------
+
+        private List<MeshTreeEdge> BuildMinimumSpanningTree()
+        {
+            var edges = new List<MeshTreeEdge>();
+
+            if (_gateway == null ||
+                !_graph.ContainsKey(_gateway) ||
+                _offline.Contains(_gateway))
+            {
+                return edges;
+            }
+
+            var visited = new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase)
+            {
+                _gateway
+            };
+
+            while (true)
+            {
+                string? bestFrom = null;
+                string? bestTo = null;
+                double bestWeight = double.PositiveInfinity;
+
+                foreach (string from in visited.OrderBy(x => x))
+                {
+                    foreach (var link in
+                        _graph[from].OrderBy(x => x.Key))
+                    {
+                        if (visited.Contains(link.Key) ||
+                            _offline.Contains(link.Key))
+                        {
+                            continue;
+                        }
+
+                        if (link.Value < bestWeight)
+                        {
+                            bestFrom = from;
+                            bestTo = link.Key;
+                            bestWeight = link.Value;
+                        }
+                    }
+                }
+
+                if (bestFrom == null || bestTo == null)
+                    break;
+
+                visited.Add(bestTo);
+
+                edges.Add(new MeshTreeEdge
+                {
+                    From = bestFrom,
+                    To = bestTo,
+                    Weight = bestWeight
+                });
+            }
+
+            return edges;
+        }
+
         public object GetMinimumSpanningTree()
         {
             lock (_lock)
@@ -206,58 +286,16 @@ namespace SmartX.Api.Services
                     return new
                     {
                         message = "An online gateway is required.",
-                        edges = new List<object>(),
+                        edges = new List<MeshTreeEdge>(),
                         totalWeight = 0.0,
                         connected = false
                     };
                 }
 
-                var visited = new HashSet<string>(
-                    StringComparer.OrdinalIgnoreCase)
-                {
-                    _gateway
-                };
+                var edges = BuildMinimumSpanningTree();
 
-                var edges = new List<object>();
-                double totalWeight = 0;
-
-                while (true)
-                {
-                    string? bestFrom = null;
-                    string? bestTo = null;
-                    double bestWeight = double.PositiveInfinity;
-
-                    foreach (string from in visited)
-                    {
-                        foreach (var link in _graph[from])
-                        {
-                            if (visited.Contains(link.Key) ||
-                                _offline.Contains(link.Key))
-                                continue;
-
-                            if (link.Value < bestWeight)
-                            {
-                                bestFrom = from;
-                                bestTo = link.Key;
-                                bestWeight = link.Value;
-                            }
-                        }
-                    }
-
-                    if (bestFrom == null || bestTo == null)
-                        break;
-
-                    visited.Add(bestTo);
-
-                    edges.Add(new
-                    {
-                        from = bestFrom,
-                        to = bestTo,
-                        weight = bestWeight
-                    });
-
-                    totalWeight += bestWeight;
-                }
+                double totalWeight =
+                    edges.Sum(edge => edge.Weight);
 
                 int onlineCount = _graph.Keys
                     .Count(mac => !_offline.Contains(mac));
@@ -267,9 +305,197 @@ namespace SmartX.Api.Services
                     message = "Prim's minimum spanning tree calculated.",
                     edges,
                     totalWeight,
-                    connected = visited.Count == onlineCount
+                    connected = edges.Count + 1 == onlineCount
                 };
             }
         }
+
+        // -------------------------------------------------------
+        // PART 3 — ROUTE TO GATEWAY USING THE MST
+        // -------------------------------------------------------
+
+        public MeshRouteResult GetRouteToGateway(string sensorMac)
+        {
+            lock (_lock)
+            {
+                var result = new MeshRouteResult
+                {
+                    SourceMac = sensorMac?.Trim() ?? "",
+                    GatewayMac = _gateway,
+                    Algorithm = "MST path using Prim's algorithm"
+                };
+
+                if (string.IsNullOrWhiteSpace(sensorMac))
+                {
+                    result.Message = "Sensor MAC address is required.";
+                    return result;
+                }
+
+                string source = sensorMac.Trim();
+
+                if (!_graph.ContainsKey(source))
+                {
+                    result.Message = "Sensor node does not exist.";
+                    return result;
+                }
+
+                if (_offline.Contains(source))
+                {
+                    result.Message = "Source sensor is offline.";
+                    return result;
+                }
+
+                if (_gateway == null ||
+                    !_graph.ContainsKey(_gateway) ||
+                    _offline.Contains(_gateway))
+                {
+                    result.Message = "No online gateway is configured.";
+                    return result;
+                }
+
+                if (string.Equals(
+                    source,
+                    _gateway,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Reachable = true;
+                    result.Path.Add(source);
+                    result.Message = "Source is the gateway.";
+                    return result;
+                }
+
+                var mstEdges = BuildMinimumSpanningTree();
+
+                var tree = new Dictionary<
+                    string,
+                    List<(string Neighbour, double Weight)>>(
+                        StringComparer.OrdinalIgnoreCase);
+
+                foreach (var edge in mstEdges)
+                {
+                    if (!tree.ContainsKey(edge.From))
+                        tree[edge.From] = new();
+
+                    if (!tree.ContainsKey(edge.To))
+                        tree[edge.To] = new();
+
+                    tree[edge.From].Add((edge.To, edge.Weight));
+                    tree[edge.To].Add((edge.From, edge.Weight));
+                }
+
+                if (!tree.ContainsKey(source))
+                {
+                    result.Message =
+                        "No MST route from this sensor to the gateway.";
+                    return result;
+                }
+
+                var queue = new Queue<string>();
+
+                var visited = new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+                var previous = new Dictionary<
+                    string,
+                    (string Parent, double Weight)>(
+                        StringComparer.OrdinalIgnoreCase);
+
+                queue.Enqueue(source);
+                visited.Add(source);
+
+                while (queue.Count > 0)
+                {
+                    string current = queue.Dequeue();
+
+                    if (string.Equals(
+                        current,
+                        _gateway,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        break;
+                    }
+
+                    if (!tree.TryGetValue(current, out var neighbours))
+                        continue;
+
+                    foreach (var neighbour in neighbours)
+                    {
+                        if (visited.Add(neighbour.Neighbour))
+                        {
+                            previous[neighbour.Neighbour] =
+                                (current, neighbour.Weight);
+
+                            queue.Enqueue(neighbour.Neighbour);
+                        }
+                    }
+                }
+
+                if (!visited.Contains(_gateway))
+                {
+                    result.Message =
+                        "Gateway is unreachable through the MST.";
+                    return result;
+                }
+
+                var reversedPath = new List<string>();
+                double totalWeight = 0;
+
+                string step = _gateway;
+                reversedPath.Add(step);
+
+                while (!string.Equals(
+                    step,
+                    source,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    var parent = previous[step];
+
+                    totalWeight += parent.Weight;
+                    step = parent.Parent;
+
+                    reversedPath.Add(step);
+                }
+
+                reversedPath.Reverse();
+
+                result.Reachable = true;
+                result.Path = reversedPath;
+                result.HopCount = reversedPath.Count - 1;
+                result.TotalWeight = totalWeight;
+                result.Message =
+                    "Gateway route calculated successfully.";
+
+                return result;
+            }
+        }
+    }
+
+    // -------------------------------------------------------
+    // PART 3 — ROUTING RESPONSE MODELS
+    // -------------------------------------------------------
+
+    public sealed class MeshTreeEdge
+    {
+        public string From { get; set; } = "";
+        public string To { get; set; } = "";
+        public double Weight { get; set; }
+    }
+
+    public sealed class MeshRouteResult
+    {
+        public string SourceMac { get; set; } = "";
+        public string? GatewayMac { get; set; }
+
+        public string Algorithm { get; set; } = "";
+
+        public bool Reachable { get; set; }
+
+        public List<string> Path { get; set; } = new();
+
+        public int HopCount { get; set; }
+
+        public double TotalWeight { get; set; }
+
+        public string Message { get; set; } = "";
     }
 }

@@ -929,6 +929,29 @@ app.MapPut(
     });
 
 // -------------------------------------------------------
+// PART 3 — GATEWAY ROUTING THROUGH PRIM'S MST
+// -------------------------------------------------------
+
+app.MapGet(
+    "/api/mesh/route",
+    (
+        string macAddress,
+        MeshNetworkService mesh) =>
+    {
+        if (string.IsNullOrWhiteSpace(macAddress))
+        {
+            return Results.BadRequest(new
+            {
+                message = "Sensor MAC address is required."
+            });
+        }
+
+        var route = mesh.GetRouteToGateway(macAddress);
+
+        return Results.Ok(route);
+    });
+
+// -------------------------------------------------------
 // START API
 // -------------------------------------------------------
 
